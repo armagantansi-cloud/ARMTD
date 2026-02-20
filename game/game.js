@@ -65,7 +65,7 @@ const PEEL_BUFF_INFO = {
 
 // Versioning: patch (right) for every update, minor (middle) for big updates.
 // Major (left) is increased manually.
-const GAME_VERSION = "0.2.55";
+const GAME_VERSION = "0.2.56";
 const LOG_TIPS = [
   "Tip: Discover each tower's unique skill and prestige skill.",
   "Tip: Towers can reach level 20. Sometimes even higher.",
@@ -3507,6 +3507,8 @@ class Game {
       const dt=clamp(t-this.lastT,0,0.05);
       this.lastT=t;
       const perfEnabled = !!window.__armtdPerf;
+      const perfHud = this.uiAdapter?.refs?.perfHud || null;
+      if (perfHud) perfHud.style.display = perfEnabled ? "block" : "none";
       const perfFrameStart = perfEnabled ? performance.now() : 0;
       let perfStart = 0;
 
@@ -3534,9 +3536,11 @@ class Game {
         acc.frameMs += (performance.now() - perfFrameStart);
         if (acc.sec >= 1.0) {
           const inv = 1 / Math.max(1, acc.frames);
+          const summary = `fps:${(acc.frames / acc.sec).toFixed(1)} frame:${(acc.frameMs * inv).toFixed(2)}ms update:${(acc.updateMs * inv).toFixed(2)}ms draw:${(acc.drawMs * inv).toFixed(2)}ms ui:${(acc.uiMs * inv).toFixed(2)}ms`;
           console.debug(
-            `[PERF] fps:${(acc.frames / acc.sec).toFixed(1)} frame:${(acc.frameMs * inv).toFixed(2)}ms update:${(acc.updateMs * inv).toFixed(2)}ms draw:${(acc.drawMs * inv).toFixed(2)}ms ui:${(acc.uiMs * inv).toFixed(2)}ms`
+            `[PERF] ${summary}`
           );
+          if (perfHud) perfHud.textContent = summary;
           acc.sec = 0;
           acc.frames = 0;
           acc.frameMs = 0;
@@ -3545,6 +3549,7 @@ class Game {
           acc.uiMs = 0;
         }
       } else if (this._perfAcc.frames > 0) {
+        if (perfHud) perfHud.textContent = "";
         this._perfAcc.sec = 0;
         this._perfAcc.frames = 0;
         this._perfAcc.frameMs = 0;

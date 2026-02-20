@@ -27,7 +27,8 @@ const GAME_UI_IDS = {
   sellBtnHud: "sellBtnHud",
   speedSlider: "speedSlider",
   speedLabel: "speedLabel",
-  cheatPanel: "cheatPanel"
+  cheatPanel: "cheatPanel",
+  perfHud: "perfHud"
 };
 
 function createGameUiAdapter(doc = document){

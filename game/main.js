@@ -1681,6 +1681,14 @@ function renderMenuPatchNotes(){
         "Speed slider/label syncing and cheat-panel toggle flow were moved behind the adapter, reducing direct document.getElementById usage in gameplay core.",
         "This keeps behavior identical while preparing a safer path for deeper UI/gameplay decoupling."
       ]
+    },
+    {
+      version: "0.2.56",
+      notes: [
+        "Phase 1 telemetry improved: performance sampling can now also render to an optional on-screen HUD in addition to console output.",
+        "Enable sampling with window.__armtdPerf = true; fps/frame/update/draw/ui metrics are refreshed once per second.",
+        "Perf HUD element visibility is now managed through the UI adapter boundary."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();
