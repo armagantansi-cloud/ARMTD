@@ -1697,6 +1697,14 @@ function renderMenuPatchNotes(){
         "Tower target selection and mana-burn / mage-aura range checks now use spatial queries instead of full-list scans where applicable.",
         "This is a low-risk foundation step to reduce hot-path query cost before deeper targeting/projectile optimizations."
       ]
+    },
+    {
+      version: "0.2.58",
+      notes: [
+        "Phase 1 hot-path pass expanded: projectile/ring enemy scans now use spatial queries where possible.",
+        "EffectRing hit checks, projectile retargeting, drift collision candidate selection and pass-radius checks were moved off full enemy-list loops.",
+        "This further reduces combat-frame query cost while preserving existing gameplay behavior."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();

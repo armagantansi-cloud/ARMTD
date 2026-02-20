@@ -52,6 +52,7 @@ class EffectLine {
       this.dead=false;
       this.onHit=onHit;
       this.hitSet=new Set();
+      this._enemyRangeScratch = [];
     }
     update(dt, game){
       this.t -= dt;
@@ -59,8 +60,11 @@ class EffectLine {
       if (this.r >= this.maxR) this.r = this.maxR;
 
       if (this.onHit) {
+        const nearby = (typeof game.getEnemiesInRange === "function")
+          ? game.getEnemiesInRange(this.x, this.y, this.r, this._enemyRangeScratch)
+          : game.enemies;
         const rr2=this.r*this.r;
-        for(const e of game.enemies){
+        for(const e of nearby){
           if(e.dead || e.reachedExit) continue;
           if(this.hitSet.has(e)) continue;
           const d2=dist2(this.x,this.y,e.x,e.y);
@@ -114,6 +118,7 @@ class EffectLine {
         this.t.incomingEstimate += this.expectedDealt;
         this._counted=true;
       }
+      this._enemyRangeScratch = [];
     }
 
     updateTrail(dt){
@@ -152,9 +157,13 @@ class EffectLine {
     }
 
     tryRetarget(game){
-      const maxR2=3.0*3.0;
+      const maxRadius = 3.0;
+      const maxR2=maxRadius*maxRadius;
+      const nearby = (typeof game.getEnemiesInRange === "function")
+        ? game.getEnemiesInRange(this.x, this.y, maxRadius, this._enemyRangeScratch)
+        : game.enemies;
       let best=null, bestD2=Infinity;
-      for(const e of game.enemies){
+      for(const e of nearby){
         if(e.dead || e.reachedExit) continue;
         const d2=dist2(this.x,this.y,e.x,e.y);
         if(d2 <= maxR2 && d2 < bestD2){ best=e; bestD2=d2; }
@@ -204,9 +213,16 @@ class EffectLine {
       const vx = bx - ax;
       const vy = by - ay;
       const vv = vx*vx + vy*vy;
+      const segLen = Math.hypot(vx, vy);
+      const qx = (ax + bx) * 0.5;
+      const qy = (ay + by) * 0.5;
+      const qRadius = (segLen * 0.5) + hitR;
+      const nearby = (typeof game.getEnemiesInRange === "function")
+        ? game.getEnemiesInRange(qx, qy, qRadius, this._enemyRangeScratch)
+        : game.enemies;
       let best = null;
       let bestT = Infinity;
-      for (const e of game.enemies) {
+      for (const e of nearby) {
         if (!e || e.dead || e.reachedExit) continue;
         let t = 0;
         if (vv > 1e-8) {
@@ -292,6 +308,7 @@ class EffectLine {
       this._passRepeatSec = Math.max(0, options.passRepeatSec ?? 0);
       this._passHitSet = this._onPass ? new Set() : null;
       this._passLastHit = this._onPass ? new Map() : null;
+      this._enemyRangeScratch = [];
       this._curveT = 0;
       this._curve = null;
 
@@ -380,7 +397,10 @@ class EffectLine {
         if (this._onPass && this._passRadius > 0) {
           const rr2 = this._passRadius * this._passRadius;
           const nowSec = performance.now() / 1000;
-          for (const e of game.enemies) {
+          const nearby = (typeof game.getEnemiesInRange === "function")
+            ? game.getEnemiesInRange(this.x, this.y, this._passRadius, this._enemyRangeScratch)
+            : game.enemies;
+          for (const e of nearby) {
             if (e.dead || e.reachedExit) continue;
             if (dist2(this.x, this.y, e.x, e.y) <= rr2) {
               if (this._passRepeatSec <= 0) {
