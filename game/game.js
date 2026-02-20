@@ -7,6 +7,7 @@ import { scaleForWave, waveModifiers, WaveState, setEndlessScalingEnabled, getWa
 import { TOWER_DEFS, Tower, milestoneTier, buildChoicesForTower, gainCurve, upgradeCostCurve, peelBuffPower, peelBounceCountFromAD } from "./towers.js";
 import { openModal, closeModal, isModalOpen } from "./ui.js";
 import { createGameUiAdapter } from "./ui_adapter.js";
+import { SpatialIndex } from "./spatial_index.js";
 
 const BOSS_SKILL_INFO = {
   cleanse: { name: "Cleanse", color: "rgba(59,130,246,0.85)" },
@@ -65,7 +66,7 @@ const PEEL_BUFF_INFO = {
 
 // Versioning: patch (right) for every update, minor (middle) for big updates.
 // Major (left) is increased manually.
-const GAME_VERSION = "0.2.56";
+const GAME_VERSION = "0.2.57";
 const LOG_TIPS = [
   "Tip: Discover each tower's unique skill and prestige skill.",
   "Tip: Towers can reach level 20. Sometimes even higher.",
@@ -267,6 +268,10 @@ class Game {
       this.projectiles=[];
       this.effects=[];
       this.rings=[];
+      this.enemySpatial = new SpatialIndex(1.5);
+      this.towerSpatial = new SpatialIndex(1.5);
+      this._enemyRangeScratch = [];
+      this._towerRangeScratch = [];
 
       this.floaters=[];        // damage/gold text (enemy Ã¼zerinde)
       this.centerQueue=[];     // ekran ortasÄ± ardÄ±ÅŸÄ±k yazÄ±lar
@@ -1225,6 +1230,42 @@ class Game {
       }
     }
 
+    rebuildTowerSpatialIndex(){
+      this.towerSpatial.rebuild(this.towers, t => !!t);
+    }
+
+    rebuildEnemySpatialIndex(){
+      this.enemySpatial.rebuild(this.enemies, e => !!e && !e.dead && !e.reachedExit);
+    }
+
+    getEnemiesInRange(x, y, radius, out = null){
+      const buf = out || this._enemyRangeScratch;
+      if (!this.enemySpatial) {
+        buf.length = 0;
+        const r2 = radius * radius;
+        for (const e of this.enemies) {
+          if (!e || e.dead || e.reachedExit) continue;
+          if (dist2(x, y, e.x, e.y) <= r2) buf.push(e);
+        }
+        return buf;
+      }
+      return this.enemySpatial.queryCircle(x, y, radius, buf);
+    }
+
+    getTowersInRange(x, y, radius, out = null){
+      const buf = out || this._towerRangeScratch;
+      if (!this.towerSpatial) {
+        buf.length = 0;
+        const r2 = radius * radius;
+        for (const t of this.towers) {
+          if (!t) continue;
+          if (dist2(x, y, t.x, t.y) <= r2) buf.push(t);
+        }
+        return buf;
+      }
+      return this.towerSpatial.queryCircle(x, y, radius, buf);
+    }
+
     getBossNextSkill(enemy){
       if (!enemy?.bossSkills) return null;
       const debuffed = (enemy.poisonStacks > 0) || (enemy.slowPct > 0.2) || (enemy.frostbiteTime > 0) || (enemy.frostbiteDotTime > 0);
@@ -1601,6 +1642,8 @@ class Game {
         }
       }
 
+      this.rebuildTowerSpatialIndex();
+
       // Enemies move
       for(const e of this.enemies){
         const wasExit=e.reachedExit;
@@ -1615,6 +1658,8 @@ class Game {
           this.logEvent(`Core hit: -${dmg} HP (HP: ${this.coreHP})`);
         }
       }
+
+      this.rebuildEnemySpatialIndex();
 
       // Prestige flags
       this.anyBreakerPrestigeActive = this.towers.some(t => t.def.id==="breaker" && t.prestigeActive > 0);
@@ -1638,12 +1683,10 @@ class Game {
           const magic = Math.max(0, (m.magicBonus || 0) * (m.perks?.magMul ?? 1) * (m.peelMul?.("mag") ?? 1));
           const auraMul = magePrestigeAuraMulFromMagic(magic);
           const auraRange = m.range + magePrestigeAuraRangeBonusFromMagic(magic);
-          const r2 = auraRange * auraRange;
-          for (const t of this.towers) {
+          const inRange = this.getTowersInRange(m.x, m.y, auraRange, this._towerRangeScratch);
+          for (const t of inRange) {
             if (t === m) continue;
-            if (dist2(m.x,m.y,t.x,t.y) <= r2) {
-              t._manaGainTempMul = Math.max(t._manaGainTempMul, auraMul);
-            }
+            t._manaGainTempMul = Math.max(t._manaGainTempMul, auraMul);
           }
         }
       }

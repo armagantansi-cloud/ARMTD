@@ -819,8 +819,11 @@ class Tower {
       }
       if (mode !== "pure") this.lockedTarget = null;
 
+      const nearby = (typeof game.getEnemiesInRange === "function")
+        ? game.getEnemiesInRange(this.x, this.y, this.range)
+        : game.enemies;
       const candidates = [];
-      for(const e of game.enemies){
+      for(const e of nearby){
         if (!this.isValidTarget(e, r2)) continue;
         candidates.push(e);
       }

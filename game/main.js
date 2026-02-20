@@ -1689,6 +1689,14 @@ function renderMenuPatchNotes(){
         "Enable sampling with window.__armtdPerf = true; fps/frame/update/draw/ui metrics are refreshed once per second.",
         "Perf HUD element visibility is now managed through the UI adapter boundary."
       ]
+    },
+    {
+      version: "0.2.57",
+      notes: [
+        "Phase 1 spatial query groundwork added: gameplay now has a lightweight grid-based spatial index for radius lookups.",
+        "Tower target selection and mana-burn / mage-aura range checks now use spatial queries instead of full-list scans where applicable.",
+        "This is a low-risk foundation step to reduce hot-path query cost before deeper targeting/projectile optimizations."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();

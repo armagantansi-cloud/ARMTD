@@ -236,6 +236,7 @@ function computePrevWaveTotals(prevWave) {
       this._blizVulnMul = 1;
 
       this.incomingEstimate = 0;
+      this._towerRangeScratch = [];
 
       this.bossSkills = null;
       if (this.isBoss) {
@@ -591,9 +592,13 @@ function computePrevWaveTotals(prevWave) {
 
       // Siphon aura: menzil icindeki tower manasini azalt.
       if (this.manaBurn && this.game?.towers?.length) {
+        const canQuery = typeof this.game.getTowersInRange === "function";
+        const towers = canQuery
+          ? this.game.getTowersInRange(this.x, this.y, this.manaBurn.radius, this._towerRangeScratch)
+          : this.game.towers;
         const r2 = this.manaBurn.radius * this.manaBurn.radius;
-        for (const t of this.game.towers) {
-          if (dist2(this.x, this.y, t.x, t.y) > r2) continue;
+        for (const t of towers) {
+          if (!canQuery && dist2(this.x, this.y, t.x, t.y) > r2) continue;
           if (t.maxMana > 0) {
             const drain = Math.min(CFG.MANA_BURN_FLAT_PER_SEC, t.maxMana * CFG.MANA_BURN_PCT_PER_SEC);
             t.mana = Math.max(0, t.mana - drain * dt);
