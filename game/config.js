@@ -1,0 +1,158 @@
+const CFG = {
+    // Core
+    DEF_K: 60,
+    TOWER_MAX_LEVEL: 20,
+    PRESTIGE_LEVEL: 21,
+
+    // Mana/Hit nerf
+    MANA_ON_HIT_NERF_MULT: 1/3,
+
+    // Prestige
+    PRESTIGE_RECHARGE_TIME_SEC: 100,   // süreyle dolsun: ~100s hedef
+    PRESTIGE_ACTIVE_SEC: 12,
+    PRESTIGE_GLOW: {
+      inner: "rgba(56,189,248,0.70)",  // mavi
+      outer: "rgba(250,204,21,0.80)"   // sarı
+    },
+    LV20_GLOW: "rgba(250,204,21,0.85)",
+
+    // Prestige upgrade cost
+    PRESTIGE_UPGRADE_COST_FLAT: 2600,
+
+    // Sniper (normal skill artık carepackage)
+    SNIPER_CAREPACKAGE_TIME_SEC: 140,
+    SNIPER_CAREPACKAGE_BASE_GOLD: 80,
+    SNIPER_CAREPACKAGE_PER_WAVE: 24,
+
+    // Floating damage text
+    FLOAT_TEXT_LIFE: 0.75,
+    FLOAT_TEXT_RISE: 0.55, // tile
+    FLOAT_TEXT_SPREAD: 0.10,
+    FLOAT_TEXT_SIZE: 14,
+    FLOAT_TEXT_CRIT_SIZE: 20,
+
+    // Poison
+    POISON_TICK_CD: 0.10,
+    POISON_TICK_MIN: 0.02,
+    POISON_PERMANENT: true,
+
+    // Frostbite (Blizzard prestige)
+    FROSTBITE_TICK_CD: 0.10,
+    FROSTBITE_DOT_DURATION: 3.0,
+
+    // Poison prestige bomb
+    POISON_BOMB_RADIUS_TILES: 2.1,
+    POISON_PRESTIGE_PROJECTILE_SPEED: 2.4,
+    POISON_PRESTIGE_PASS_RADIUS_TILES: 2.0,
+
+    // Enemy behavior
+    BOSS_SKILL_INTERVAL_SEC: 10.0,
+    BOSS_HP_GROW_PCT: 0.10,
+    SLOW_MAX_PCT: 1.0,
+    BOSS_SKILL_CLEANSE_CD: 14.0,
+    BOSS_SKILL_SHIELD_CD: 18.0,
+    BOSS_SKILL_SUMMON_CD: 16.0,
+    BOSS_SKILL_HEAL_CD: 13.0,
+    BOSS_HEAL_PCT: 0.12,
+
+    // Spawn pacing (mid/late pressure)
+    SPAWN_INTERVAL_BASE: 0.55,
+    SPAWN_INTERVAL_MIN: 0.30,
+    SPAWN_INTERVAL_MID_START: 20,
+    SPAWN_INTERVAL_LATE_START: 50,
+    SPAWN_INTERVAL_END_START: 90,
+    SPAWN_INTERVAL_MID_STEP: 0.0035,
+    SPAWN_INTERVAL_LATE_STEP: 0.0028,
+    SPAWN_INTERVAL_END_STEP: 0.0020,
+    SPAWN_BURST_START_WAVE: 30,
+    SPAWN_BURST_INTERVAL_MUL: 0.45,
+    SPAWN_BURST_EVERY_BASE: 9,
+    SPAWN_BURST_EVERY_MIN: 4,
+    SPAWN_BURST_EVERY_STEP_WAVES: 20,
+
+    // Elite affixes
+    ELITE_START_WAVE: 25,
+    ELITE_CHANCE_BASE: 0.04,
+    ELITE_CHANCE_PER_WAVE: 0.0020,
+    ELITE_CHANCE_MAX: 0.14,
+    ELITE_BOSS_CHANCE_MULT: 0.50,
+    AFFIX_ARMORED_ARMOR_PCT: 0.45,
+    AFFIX_ARMORED_HP_PCT: 0.20,
+    AFFIX_ARCANE_MR_PCT: 0.45,
+    AFFIX_ARCANE_HP_PCT: 0.18,
+    AFFIX_SWIFT_SPEED_PCT: 0.35,
+    AFFIX_SWIFT_SLOW_RESIST: 0.10,
+    AFFIX_REGEN_PCT_PER_SEC: 0.006,
+    AFFIX_VOLATILE_SPAWN_BASE: 2,
+    AFFIX_VOLATILE_SPAWN_WAVE_STEP: 40,
+    AFFIX_MULTI_SCALE_STEP: 0.20,
+    AFFIX_MULTI_SCALE_MIN: 0.70,
+
+    // Debuff resist (mid/late)
+    DEBUFF_RESIST_START_WAVE: 30,
+    SLOW_RESIST_PER_WAVE: 0.0035,
+    SLOW_RESIST_MAX: 0.22,
+    POISON_RESIST_PER_WAVE: 0.005,
+    POISON_RESIST_MAX: 0.30,
+    POISON_DECAY_START_WAVE: 45,
+    POISON_DECAY_PER_WAVE: 0.06,
+    POISON_DECAY_MAX_PER_SEC: 3.0,
+
+    // Armor plates (anti-burst)
+    PLATE_START_WAVE: 45,
+    PLATE_MAX_PCT: 0.08,
+    PLATE_MAX_PCT_BOSS: 0.06,
+    PLATE_REGEN_SEC: 12,
+
+    // Mana burn enemy
+    MANA_BURN_START_WAVE: 35,
+    MANA_BURN_RATIO_PER_WAVE: 0.003,
+    MANA_BURN_RATIO_MAX: 0.04,
+    MANA_BURN_AURA_RADIUS_TILES: 2.0,
+    MANA_BURN_PCT_PER_SEC: 0.03,
+    MANA_BURN_FLAT_PER_SEC: 4.0,
+    MANA_BURN_PRESTIGE_PCT_PER_SEC: 0.00,
+    MANA_BURN_PRESTIGE_FLAT_PER_SEC: 0.0,
+
+    // Boss skill variety
+    BOSS_SHIELD_PCT: 0.08,
+    BOSS_SHIELD_DURATION: 4.0,
+    BOSS_CLEANSE_POISON_KEEP_PCT: 0.25,
+    BOSS_SUMMON_BASE: 2,
+    BOSS_SUMMON_PER_30_WAVES: 1,
+
+    // Resistance waves
+    RESIST_WAVE_START: 50,
+    RESIST_WAVE_EVERY: 5,
+    RESIST_WAVE_DEF_PCT_BASE: 0.20,
+    RESIST_WAVE_DEF_PCT_PER_WAVE: 0.002,
+    RESIST_WAVE_DEF_PCT_MAX: 0.45,
+    RESIST_WAVE_HP_PCT: 0.06,
+
+    // Peel tower (support)
+    PEEL_BUFF_DURATION: 3.0,
+    PEEL_BUFF_BASE_PCT: 0.20,
+    PEEL_BUFF_MAX_PCT: 1.20,
+    PEEL_BOUNCE_MIN: 1,
+    PEEL_BOUNCE_MAX: 100,
+    PEEL_PROJECTILE_SPEED: 2.5,
+
+    // Economy friction (late)
+    WEALTH_NERF_START_WAVE: 40,
+    WEALTH_NERF_PER_WAVE: 0.005,
+    WEALTH_NERF_MAX: 0.35,
+    UPGRADE_COST_WAVE_START: 35,
+    UPGRADE_COST_PER_WAVE: 0.005,
+    UPGRADE_COST_MAX_MULT: 1.25,
+
+    // Prestige fatigue
+
+    // UI
+    MAX_SHOP_COLS: 2
+  };
+
+  // =========================================================
+  // Helpers
+  // =========================================================
+  
+export { CFG };

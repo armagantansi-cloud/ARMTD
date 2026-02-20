@@ -1,0 +1,409 @@
+﻿<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Arm Tower Defence</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="mainMenuOpen">
+<div id="mainMenuOverlay" class="mainMenuOverlay">
+  <div class="mainMenuBackdrop" aria-hidden="true"></div>
+  <aside id="menuRarityPanel" class="menuSidePanel menuSideLeft">
+    <h3>Special Upgrade Rarity</h3>
+    <div class="menuRarityList">
+      <div class="menuRarityCard rarity-common"><span>Common</span><span>49.9%</span></div>
+      <div class="menuRarityCard rarity-uncommon"><span>Uncommon</span><span>30.0%</span></div>
+      <div class="menuRarityCard rarity-rare"><span>Rare</span><span>13.0%</span></div>
+      <div class="menuRarityCard rarity-epic"><span>Epic</span><span>6.0%</span></div>
+      <div class="menuRarityCard rarity-legendary"><span>Legendary</span><span>1.0%</span></div>
+      <div class="menuRarityCard rarity-mythical"><span>Mythical Story</span><span>0.1%</span></div>
+    </div>
+  </aside>
+
+  <aside id="menuCodexPanel" class="menuSidePanel menuSideRight">
+    <h3>Game Codex</h3>
+    <details class="menuCodexSection" open>
+      <summary>Towers</summary>
+      <div class="menuCodexItems">
+        <button type="button" class="menuCodexEntry" data-codex-id="tower:archer"><span>🏹 Archer</span><span class="menuCodexOpenTag">Open</span></button>
+        <button type="button" class="menuCodexEntry" data-codex-id="tower:mage"><span>🔮 Mage</span><span class="menuCodexOpenTag">Open</span></button>
+        <button type="button" class="menuCodexEntry" data-codex-id="tower:breaker"><span>🔨 Breaker</span><span class="menuCodexOpenTag">Open</span></button>
+        <button type="button" class="menuCodexEntry" data-codex-id="tower:blizzard"><span>❄ Blizzard</span><span class="menuCodexOpenTag">Open</span></button>
+        <button type="button" class="menuCodexEntry" data-codex-id="tower:poison"><span>☣ Poison</span><span class="menuCodexOpenTag">Open</span></button>
+        <button type="button" class="menuCodexEntry" data-codex-id="tower:sniper"><span>🎯 Sniper</span><span class="menuCodexOpenTag">Open</span></button>
+        <button type="button" class="menuCodexEntry" data-codex-id="tower:peel"><span>🛰 Peel</span><span class="menuCodexOpenTag">Open</span></button>
+      </div>
+    </details>
+    <details class="menuCodexSection">
+      <summary>Mobs</summary>
+      <div class="menuCodexItems">
+        <button type="button" class="menuCodexEntry" data-codex-id="mob:runner"><span>🏃 Runner</span><span class="menuCodexOpenTag">Open</span></button>
+        <button type="button" class="menuCodexEntry" data-codex-id="mob:tank"><span>🛡 Tank</span><span class="menuCodexOpenTag">Open</span></button>
+        <button type="button" class="menuCodexEntry" data-codex-id="mob:siphon"><span>🧿 Siphon</span><span class="menuCodexOpenTag">Open</span></button>
+        <button type="button" class="menuCodexEntry" data-codex-id="mob:boss"><span>👑 Boss</span><span class="menuCodexOpenTag">Open</span></button>
+      </div>
+    </details>
+    <details class="menuCodexSection">
+      <summary>Mob Effects</summary>
+      <div class="menuCodexItems">
+        <button type="button" class="menuCodexEntry" data-codex-id="effect:armored"><span>🛡 Armored</span><span class="menuCodexOpenTag">Open</span></button>
+        <button type="button" class="menuCodexEntry" data-codex-id="effect:arcane"><span>✨ Arcane</span><span class="menuCodexOpenTag">Open</span></button>
+        <button type="button" class="menuCodexEntry" data-codex-id="effect:swift"><span>💨 Swift</span><span class="menuCodexOpenTag">Open</span></button>
+        <button type="button" class="menuCodexEntry" data-codex-id="effect:regen"><span>💚 Regenerating</span><span class="menuCodexOpenTag">Open</span></button>
+        <button type="button" class="menuCodexEntry" data-codex-id="effect:volatile"><span>💥 Volatile</span><span class="menuCodexOpenTag">Open</span></button>
+      </div>
+    </details>
+  </aside>
+  <div id="menuCodexDetailBack" class="menuCodexDetailBack" aria-hidden="true">
+    <div class="menuCodexDetailCard">
+      <div class="menuCodexDetailHead">
+        <div class="menuCodexDetailHeadLeft">
+          <div id="menuCodexDetailType" class="menuCodexDetailType">Tower</div>
+          <h3 id="menuCodexDetailTitle" class="menuCodexDetailTitle">Codex Detail</h3>
+        </div>
+        <button id="menuCodexDetailCloseBtn" type="button" class="menuCodexDetailClose">Close</button>
+      </div>
+      <div class="menuCodexDetailToolbar">
+        <div class="menuCodexDetailTabs" role="tablist" aria-label="Codex Categories">
+          <button id="menuCodexTabTowers" class="menuCodexTab active" type="button" data-codex-tab="tower">Towers</button>
+          <button id="menuCodexTabMobs" class="menuCodexTab" type="button" data-codex-tab="mob">Mobs</button>
+          <button id="menuCodexTabMods" class="menuCodexTab" type="button" data-codex-tab="effect">Modifications</button>
+        </div>
+        <div class="menuCodexDetailPager">
+          <button id="menuCodexPrevBtn" class="menuCodexPagerBtn prev" type="button" aria-label="Previous">◀</button>
+          <button id="menuCodexNextBtn" class="menuCodexPagerBtn next" type="button" aria-label="Next">▶</button>
+        </div>
+      </div>
+      <div class="menuCodexDetailBody">
+        <div class="menuCodexDetailText">
+          <div id="menuCodexDetailRows" class="menuCodexDetailRows"></div>
+          <ul id="menuCodexDetailNotes" class="menuCodexDetailNotes"></ul>
+        </div>
+        <div class="menuCodexDetailVisual">
+          <img id="menuCodexDetailImage" class="menuCodexDetailImage" alt="Codex visual" />
+          <canvas id="menuCodexDetailCanvas" class="menuCodexDetailCanvas"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="mainMenuInner">
+    <div class="mainMenuTop">
+      <h1 class="mainMenuTitle">ARMTD</h1>
+    </div>
+
+    <div class="mainMenuCenter">
+      <button id="menuNewGameBtn" class="menuActionBtn">New Game</button>
+      <button id="menuContinueBtn" class="menuActionBtn" disabled>Continue</button>
+      <button id="menuSettingsBtn" class="menuActionBtn">Settings</button>
+      <button id="menuStatsBtn" class="menuActionBtn">Statistics</button>
+    </div>
+
+    <div id="menuPatchNotes" class="menuPatchNotes"></div>
+
+    <div id="menuVersionLabel" class="mainMenuVersion mono">v0.0.0</div>
+
+    <button id="fullscreenHintBtn" class="fullscreenHint" type="button">
+      <span class="fullscreenIcon" aria-hidden="true">⛶</span>
+      <span class="fullscreenText">Fullscreen Recommended</span>
+      <span class="fullscreenArrow" aria-hidden="true">↘</span>
+    </button>
+  </div>
+</div>
+
+  <div id="mapSelectOverlay" class="mapSelectOverlay">
+  <div class="mapSelectBackdrop" aria-hidden="true"></div>
+  <div class="mapSelectInner">
+    <div class="mapSelectHead">
+      <h2 class="mapSelectTitle">Maps</h2>
+      <button id="mapSelectBackBtn" class="mapSelectBackBtn" type="button">Back</button>
+    </div>
+    <button id="mapSelectPrevBtn" class="mapPagerBtn prev" type="button" aria-label="Previous Maps">◀</button>
+    <div id="mapSelectGrid" class="mapSelectGrid"></div>
+    <button id="mapSelectNextBtn" class="mapPagerBtn next" type="button" aria-label="Next Maps">▶</button>
+    <div class="mapSelectFooter">
+      <button id="mapEditorOpenBtn" class="mapEditorOpenBtn" type="button">Map Editor</button>
+      <button id="customMapsOpenBtn" class="mapEditorOpenBtn customMapsOpenBtn" type="button">Custom Maps</button>
+    </div>
+  </div>
+</div>
+
+<div id="customMapsOverlay" class="customMapsOverlay">
+  <div class="mapSelectBackdrop" aria-hidden="true"></div>
+  <div class="customMapsInner">
+    <div class="mapSelectHead">
+      <h2 class="mapSelectTitle">Custom Maps</h2>
+      <button id="customMapsBackBtn" class="mapSelectBackBtn" type="button">Back</button>
+    </div>
+    <div id="customMapsGrid" class="customMapsGrid"></div>
+  </div>
+</div>
+
+<div id="mapEditorPage" class="mapEditorPage">
+  <div class="mapEditorBackdrop" aria-hidden="true"></div>
+  <div class="mapEditorInner mapEditorLayout">
+    <div class="mapEditorCanvasSide">
+      <div class="mapEditorHead">
+        <h2>Map Editor</h2>
+        <button id="mapEditorBackBtn" class="mapSelectBackBtn" type="button">Back</button>
+      </div>
+      <div class="mapEditorCanvasWrap">
+        <canvas id="mapEditorCanvas"></canvas>
+      </div>
+      <div class="mapEditorLegend">X: a-t | Y: 0-9 ! ? # * = | W: Way, O: Obstacle, S: Spawn, C: Core</div>
+    </div>
+    <div class="mapEditorRightUi">
+      <div class="panelSection mapEditorPanel">
+        <h3>Tools</h3>
+        <div class="mapEditorTools">
+          <button id="mapEditorToolPathBtn" class="mapEditorToolBtn active" type="button">Way (W)</button>
+          <button id="mapEditorToolSpawnBtn" class="mapEditorToolBtn" type="button">Spawn (S)</button>
+          <button id="mapEditorToolCoreBtn" class="mapEditorToolBtn" type="button">Core (C)</button>
+          <button id="mapEditorToolObstacleBtn" class="mapEditorToolBtn obstacle" type="button">Obstacle (O)</button>
+          <button id="mapEditorToolEraseBtn" class="mapEditorToolBtn danger" type="button">Delete</button>
+        </div>
+      </div>
+      <div class="panelSection mapEditorPanel">
+        <h3>Validation</h3>
+        <div id="mapEditorStatus" class="small">Map editor ready.</div>
+        <div class="small mapEditorRule">Spawn and Core are required.</div>
+      </div>
+      <div class="panelSection mapEditorPanel">
+        <h3>Actions</h3>
+        <div class="mapEditorActions">
+          <button id="mapEditorClearBtn" type="button">Clear</button>
+          <button id="mapEditorExportBtn" type="button">Export</button>
+          <button id="mapEditorImportBtn" type="button">Import</button>
+          <button id="mapEditorPlayBtn" class="good" type="button">Play</button>
+        </div>
+      </div>
+      <div class="panelSection mapEditorPanel">
+        <h3>Map Name</h3>
+        <input id="mapEditorNameInput" class="mapEditorNameInput" type="text" maxlength="48" placeholder="Custom Map" />
+      </div>
+      <div id="mapCodeBack" class="panelSection mapEditorPanel mapCodePanel hidden">
+        <h3 id="mapCodeTitle">Map Code</h3>
+        <div id="mapCodeSub" class="small">Use this code to share your map.</div>
+        <textarea id="mapCodeInput" class="mapCodeInput" spellcheck="false"></textarea>
+        <div class="mapCodeActions">
+          <button id="mapCodeCopyBtn" class="good" type="button">Copy</button>
+          <button id="mapCodeApplyBtn" class="good" type="button">Load</button>
+          <button id="mapCodeCloseBtn" type="button">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+    <div class="gameArea">
+      <div class="sideHud">
+        <div id="hudSelected" class="hudBlock">
+          <h3>Selected</h3>
+          <div id="selectedInfoHud" class="small">—</div>
+
+          <div class="selBtns">
+            <div class="selBtnRow">
+              <button id="upgradeBtnHud" disabled>Upgrade</button>
+              <button id="fastUpgradeBtnHud" disabled>Fast Upgrade</button>
+            </div>
+            <div class="selBtnRow single">
+              <button id="sellBtnHud" class="danger" disabled>Sell</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="hudLog" class="hudBlock hudLog">
+          <div id="hudLogTitle" class="hudLogTitle">Log</div>
+          <div id="logLines" class="hudLogBody"></div>
+        </div>
+      </div>
+
+      <div class="canvasWrap">
+        <canvas id="c"></canvas>
+      </div>
+    </div>
+
+  <div class="ui">
+    <div class="panelSection statsPanel">
+      <div class="statsGrid">
+        <div class="statItem gold"><span class="k">Gold</span><span class="v" id="hud_gold">150</span></div>
+        <div class="statItem hp"><span class="k">Core</span><span class="v" id="hud_corehp">25</span></div>
+        <div class="statItem wave"><span class="k">Wave</span><span class="v" id="hud_wave">0</span></div>
+        <div class="statItem mobs"><span class="k">Mobs</span><span class="v" id="hud_mobs">0 / 0</span></div>
+        <div class="statItem kills"><span class="k">Kills</span><span class="v" id="hud_kills">0</span></div>
+      </div>
+    </div>
+
+    <div class="panelSection hidden">
+      <h2>Map</h2>
+      <div class="small" id="mapName"></div>
+    </div>
+
+    <div class="shopSpeedGroup">
+      <div class="panelSection wavePanel">
+        <h2>Wave</h2>
+        <div class="btnRow">
+          <button id="startWaveBtn">Start</button>
+          <button id="nextWaveNowBtn">Next Wave Now</button>
+        </div>
+      </div>
+
+      <div class="panelSection shopPanel">
+        <h2>Tower Shop</h2>
+        <div class="shopWrap">
+          <div id="shop"></div>
+        </div>
+      </div>
+
+      <div id="cheatPanel" class="panelSection cheatPanel hidden">
+        <h2>Test</h2>
+        <div class="btnRow">
+          <button id="cheatGoldBtn">+1.000.000 Gold</button>
+          <button id="cheatHpBtn">+1.000 Core</button>
+        </div>
+        <div class="btnRow">
+          <button id="cheatLegendaryBtn" class="legendaryBtn">Legendary</button>
+        </div>
+        <div class="btnRow cheatWaveRow">
+          <input id="cheatWaveInput" type="number" min="1" step="1" value="1" />
+          <button id="cheatWaveGoBtn">Wave</button>
+        </div>
+      </div>
+
+      <div class="panelSection speedPanel">
+        <div class="speedHead">
+          <h2>Oyun Hızı</h2>
+          <button id="infoModalToggle" class="infoToggle on" title="Info Modals">i</button>
+        </div>
+        <div class="sliderWrap">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+            <div class="pill">Speed: <span id="speedLabel">1.0x</span></div>
+            <div class="hint">0x = durur</div>
+          </div>
+          <input id="speedSlider" type="range" min="0" max="3" step="0.1" value="1" />
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Upgrade Modal -->
+<div id="modalBack" class="modalBack">
+  <div class="modal">
+    <h3 id="modalTitle">Special Upgrade</h3>
+    <div id="modalSub" class="sub">Game pauses while choosing.</div>
+    <div id="choiceGrid" class="choiceGrid"></div>
+  </div>
+</div>
+
+<!-- Modifier Intro Modal -->
+<div id="modifierIntroBack" class="modalBack">
+  <div class="modal modifierIntroModal">
+    <button id="modifierIntroClose" class="modifierIntroClose" aria-label="Close">✕</button>
+    <h3 id="modifierIntroTitle">New Modifier</h3>
+    <div class="modifierIntroBody">
+      <canvas id="modifierIntroIcon" width="84" height="84"></canvas>
+      <div id="modifierIntroText" class="sub">Modifier description</div>
+    </div>
+  </div>
+</div>
+
+<div id="winBack" class="modalBack">
+  <div class="modal winModal">
+    <div class="winTrophy">🏆</div>
+    <h3>YOU WIN!</h3>
+    <div class="sub">Cleared in <span id="winTime">0:00</span></div>
+    <div class="sub winWarn">You finished the main content. From this point, balance may be unfair. Good luck.</div>
+    <div class="winActions">
+      <button id="winEndBtn" class="danger">End Run</button>
+      <button id="winEndlessBtn" class="good">Endless</button>
+    </div>
+  </div>
+</div>
+
+<div id="gameOverBack" class="modalBack">
+  <div class="modal gameOverModal">
+    <h3>GAME OVER</h3>
+    <div class="sub">Core has fallen.</div>
+    <div class="winActions">
+      <button id="gameOverRestartBtn" class="good">Restart</button>
+      <button id="gameOverMainMenuBtn">Main Menu</button>
+    </div>
+  </div>
+</div>
+
+<div id="settingsBack" class="modalBack settingsBack">
+  <div class="modal settingsModal">
+    <h3>Settings</h3>
+    <div class="settingsGrid">
+      <div class="settingsCard">
+        <h4>Audio</h4>
+        <div class="settingsRow">
+          <span>Master Volume</span>
+          <span id="settingsVolumeValue" class="mono">100%</span>
+        </div>
+        <input id="settingsVolumeSlider" type="range" min="0" max="100" step="1" value="100" />
+        <div class="btnRow">
+          <button id="settingsMuteBtn">Mute</button>
+        </div>
+      </div>
+
+      <div class="settingsCard">
+        <h4>Shortcuts</h4>
+        <div id="settingsKeybindList" class="settingsKeybindList"></div>
+        <div class="btnRow">
+          <button id="settingsResetKeybindsBtn">Reset Keybinds</button>
+        </div>
+      </div>
+    </div>
+    <div class="winActions">
+      <button id="settingsCloseBtn" class="good">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="statsBack" class="modalBack statsBack">
+  <div class="modal statsModal">
+    <h3>Statistics</h3>
+    <div id="statsSummaryGrid" class="statsSummaryGrid"></div>
+    <div id="statsTowerRows" class="statsTowerRows"></div>
+    <div class="winActions">
+      <button id="statsHardResetBtn" class="danger">Hard Reset</button>
+      <button id="statsCloseBtn" class="good">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="confirmBack" class="modalBack confirmBack">
+  <div class="modal confirmModal">
+    <h3 id="confirmTitle">Are you sure?</h3>
+    <div id="confirmText" class="sub">This action will overwrite your save.</div>
+    <div class="winActions">
+      <button id="confirmCancelBtn">Cancel</button>
+      <button id="confirmAcceptBtn" class="danger">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div id="pauseMenuLayer" class="pauseMenuLayer">
+  <div id="pauseMenuPanel" class="pauseMenuPanel">
+    <div id="pauseMenuHandle" class="pauseMenuHandle">
+      <span>Paused (0.0x)</span>
+      <span class="pauseDragHint">Drag</span>
+    </div>
+    <div class="pauseMenuButtons">
+      <button id="pauseResumeBtn" class="good">Resume</button>
+      <button id="pauseSettingsBtn">Settings</button>
+      <button id="pauseSaveQuitBtn" class="danger">Save &amp; Quit to Main Menu</button>
+    </div>
+  </div>
+</div>
+
+<!-- Entry point (Live Server: open this index.html) -->
+<script type="module" src="game/main.js?v=0.2.47"></script>
+</body>
+</html>
+
