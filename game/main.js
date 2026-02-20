@@ -1641,6 +1641,30 @@ function renderMenuPatchNotes(){
         "Wave 50 remains baseline spawn pacing, but deviation is expanded: pre-50 is significantly slower, post-50 is significantly faster than before.",
         "Spawn interval clamp bounds are now dynamic for early/late pacing, fixing the old cap that suppressed early-wave slowdown."
       ]
+    },
+    {
+      version: "0.2.51",
+      notes: [
+        "First refactor step started: heavy main HUD/selection UI refresh is no longer hard-called every frame.",
+        "Game now uses a dirty + throttled UI refresh model (about 12 Hz) while keeping forced immediate refreshes for direct user actions.",
+        "This reduces avoidable DOM churn and creates a safe base for the next performance refactor steps."
+      ]
+    },
+    {
+      version: "0.2.52",
+      notes: [
+        "Second refactor step started: lifetime statistics persistence no longer writes to localStorage on every hit/kill event.",
+        "Game now marks stats dirty and flushes them at a fixed interval, including a final flush on page unload.",
+        "This removes high-frequency storage churn from hot combat paths while preserving stats integrity."
+      ]
+    },
+    {
+      version: "0.2.53",
+      notes: [
+        "Third refactor step started: core HUD/button element lookups are now cached once in Game constructor.",
+        "refreshUI now reuses cached references instead of repeating multiple document.getElementById queries each UI pass.",
+        "This trims per-refresh DOM query overhead and keeps the UI refresh path tighter."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();

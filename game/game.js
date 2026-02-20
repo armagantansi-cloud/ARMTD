@@ -64,7 +64,7 @@ const PEEL_BUFF_INFO = {
 
 // Versioning: patch (right) for every update, minor (middle) for big updates.
 // Major (left) is increased manually.
-const GAME_VERSION = "0.2.50";
+const GAME_VERSION = "0.2.53";
 const LOG_TIPS = [
   "Tip: Discover each tower's unique skill and prestige skill.",
   "Tip: Towers can reach level 20. Sometimes even higher.",
@@ -299,6 +299,14 @@ class Game {
       this._startLogged = false;
       this.hoverSpecialChoice = null;
       this.uiHover = { upgrade:false, fast:false };
+      // UI refresh throttling: avoid rebuilding large DOM panels every frame.
+      this._uiDirty = true;
+      this._uiRefreshTimer = 0;
+      this._uiRefreshInterval = 1 / 12;
+      // Lifetime stats persistence throttling: avoid localStorage writes on every hit/kill.
+      this._statsDirty = false;
+      this._statsFlushTimer = 0;
+      this._statsFlushInterval = 1.0;
       this.seenModifierIds = new Set();
       this.modifierIntroOpen = false;
       this.modifierIntroPrevSpeed = 1.0;
@@ -321,6 +329,18 @@ class Game {
       this.gameOverBack = document.getElementById("gameOverBack");
       this.gameOverRestartBtn = document.getElementById("gameOverRestartBtn");
       this.gameOverMainMenuBtn = document.getElementById("gameOverMainMenuBtn");
+      this.hudGoldEl = document.getElementById("hud_gold");
+      this.hudCoreHpEl = document.getElementById("hud_corehp");
+      this.hudKillsEl = document.getElementById("hud_kills");
+      this.hudWaveEl = document.getElementById("hud_wave");
+      this.hudMobsEl = document.getElementById("hud_mobs");
+      this.mapNameEl = document.getElementById("mapName");
+      this.startWaveBtnEl = document.getElementById("startWaveBtn");
+      this.nextWaveNowBtnEl = document.getElementById("nextWaveNowBtn");
+      this.selectedInfoHudEl = document.getElementById("selectedInfoHud");
+      this.upgradeBtnHudEl = document.getElementById("upgradeBtnHud");
+      this.fastUpgradeBtnHudEl = document.getElementById("fastUpgradeBtnHud");
+      this.sellBtnHudEl = document.getElementById("sellBtnHud");
       this.onGameOverMainMenu = null;
       if (this.gameOverRestartBtn) this.gameOverRestartBtn.onclick = () => this.restart();
       if (this.gameOverMainMenuBtn) {
@@ -372,6 +392,7 @@ class Game {
 
       this.resizeCanvasToDisplaySize();
       window.addEventListener("resize", ()=>this.resizeCanvasToDisplaySize());
+      window.addEventListener("beforeunload", () => this.persistLifetimeStats(true));
 
       this.lastT=now();
       SFX.bindAutoUnlock();
@@ -509,8 +530,14 @@ class Game {
       this.runStats = createEmptyRunStats();
     }
 
-    persistLifetimeStats(){
+    persistLifetimeStats(force=false){
+      if (!force) {
+        this._statsDirty = true;
+        return;
+      }
       writePersistentStats(this.lifetimeStats);
+      this._statsDirty = false;
+      this._statsFlushTimer = 0;
     }
 
     resetRunQuestState(){
@@ -577,7 +604,7 @@ class Game {
     hardResetPersistentStats(){
       this.lifetimeStats = createEmptyRunStats();
       this.highKills = [];
-      this.persistLifetimeStats();
+      this.persistLifetimeStats(true);
       try { localStorage.setItem("td_highkills_v2", "[]"); } catch (_) {}
     }
 
@@ -1496,6 +1523,11 @@ class Game {
     }
 
     update(dt){
+      this._statsFlushTimer += Math.max(0, Number(dt) || 0);
+      if (this._statsDirty && this._statsFlushTimer >= this._statsFlushInterval) {
+        this.persistLifetimeStats(true);
+      }
+
       if(this.gameOver) return;
 
       if (this.screenShakeTime > 0) {
@@ -1688,6 +1720,8 @@ class Game {
       if(this.selectedEnemy && (this.selectedEnemy.dead || this.selectedEnemy.reachedExit)){
         this.selectedEnemy=null;
       }
+
+      this._uiDirty = true;
 
       if(this.coreHP<=0){
         this.coreHP=0;
@@ -2939,12 +2973,18 @@ class Game {
       this.offsetY = baseOffsetY;
     }
 
-    refreshUI(){
+    refreshUI(force=false){
+      if (!force) {
+        this._uiDirty = true;
+        return;
+      }
+      this._uiDirty = false;
+      this._uiRefreshTimer = 0;
       // HUD stats (canvas iÃ§i ama DOM)
-      document.getElementById("hud_gold").textContent=formatCompact(this.gold);
-      document.getElementById("hud_corehp").textContent=formatCompact(this.coreHP);
-      document.getElementById("hud_kills").textContent=this.totalKills;
-      document.getElementById("hud_wave").textContent=this.currentWave;
+      if (this.hudGoldEl) this.hudGoldEl.textContent=formatCompact(this.gold);
+      if (this.hudCoreHpEl) this.hudCoreHpEl.textContent=formatCompact(this.coreHP);
+      if (this.hudKillsEl) this.hudKillsEl.textContent=this.totalKills;
+      if (this.hudWaveEl) this.hudWaveEl.textContent=this.currentWave;
 
       const alive = this.enemies.filter(e => !e.dead && !e.reachedExit).length;
       let remaining = 0;
@@ -2955,13 +2995,12 @@ class Game {
           remaining += w.plan[i].count;
         }
       }
-      document.getElementById("hud_mobs").textContent=`${alive} / ${remaining}`;
+      if (this.hudMobsEl) this.hudMobsEl.textContent=`${alive} / ${remaining}`;
 
-      const mapNameEl = document.getElementById("mapName");
-      if (mapNameEl) mapNameEl.textContent=this.map.name;
+      if (this.mapNameEl) this.mapNameEl.textContent=this.map.name;
 
-      const startBtn=document.getElementById("startWaveBtn");
-      const nextBtn=document.getElementById("nextWaveNowBtn");
+      const startBtn=this.startWaveBtnEl;
+      const nextBtn=this.nextWaveNowBtnEl;
       if (startBtn) {
         startBtn.disabled = this.started || this.gameOver || this.winModalOpen;
         startBtn.style.display = this.started ? "none" : "";
@@ -2981,10 +3020,11 @@ class Game {
         nextBtn.innerHTML = `<span>${label}</span>`;
       }
 
-      const info=document.getElementById("selectedInfoHud");
-      const upBtn=document.getElementById("upgradeBtnHud");
-      const fastBtn=document.getElementById("fastUpgradeBtnHud");
-      const sellBtn=document.getElementById("sellBtnHud");
+      const info=this.selectedInfoHudEl;
+      const upBtn=this.upgradeBtnHudEl;
+      const fastBtn=this.fastUpgradeBtnHudEl;
+      const sellBtn=this.sellBtnHudEl;
+      if (!info || !upBtn || !sellBtn) return;
       const calcFastUpgradeCost = (t) => {
         if (!t) return null;
         const target = Math.min(CFG.TOWER_MAX_LEVEL, (Math.floor(t.level / 5) + 1) * 5);
@@ -3456,7 +3496,10 @@ class Game {
       this.resizeCanvasToDisplaySize();
       this.update(dt);
       this.draw();
-      this.refreshUI();
+      this._uiRefreshTimer += dt;
+      if (this._uiDirty && this._uiRefreshTimer >= this._uiRefreshInterval) {
+        this.refreshUI(true);
+      }
 
       requestAnimationFrame(()=>this.loop());
     }
