@@ -1712,6 +1712,14 @@ function renderMenuPatchNotes(){
         "Bugfix: Special Upgrade hover preview in Selected panel now updates live again while modal is open.",
         "Hover-change callback now forces an immediate UI refresh so preview stats/skill deltas render without waiting for gameplay ticks."
       ]
+    },
+    {
+      version: "0.2.60",
+      notes: [
+        "Phase 1 closing tooling added: repository now includes a standard syntax-check script (tools/check_syntax.mjs) with package scripts.",
+        "Perf baseline capture guide and smoke checklist docs were added under tools/ for repeatable validation after each optimization pass.",
+        "This closes Phase 1 verification loop: optimize, measure, and run smoke checks with a shared workflow."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();
