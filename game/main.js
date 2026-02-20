@@ -214,13 +214,9 @@ function applyReleaseDataResetIfNeeded(){
 }
 
 function towerDefsPeelLast(){
-  const defs = [...TOWER_DEFS];
-  const peelIdx = defs.findIndex(d => d.id === "peel");
-  if (peelIdx >= 0) {
-    const peelDef = defs.splice(peelIdx, 1)[0];
-    defs.push(peelDef);
-  }
-  return defs;
+  const order = ["archer", "mage", "blizzard", "breaker", "poison", "sniper", "peel"];
+  const byId = new Map(TOWER_DEFS.map(def => [def.id, def]));
+  return order.map(id => byId.get(id)).filter(Boolean);
 }
 
 function getMapCatalog(){
@@ -1073,8 +1069,8 @@ const MENU_CODEX_IDS_BY_TAB = {
   tower: [
     "tower:archer",
     "tower:mage",
-    "tower:breaker",
     "tower:blizzard",
+    "tower:breaker",
     "tower:poison",
     "tower:sniper",
     "tower:peel"
@@ -1626,6 +1622,24 @@ function renderMenuPatchNotes(){
         "Versioning rule is now enforced in workflow: every update increments patch by +1; major updates can increment minor.",
         "Main-screen Patch Notes now include a concise summary for each update.",
         "Patch Notes order remains newest to oldest."
+      ]
+    },
+    {
+      version: "0.2.49",
+      notes: [
+        "Game Speed panel is now English and the Speed label is clickable: it cycles 1x -> 2x -> 3x while keeping the slider in sync.",
+        "Wave spawn pacing now treats wave 50 as baseline: earlier waves spawn slower, later waves spawn faster.",
+        "Mage Chain Bolt bug fixed: skill chaining can now continue even if the first hit kills the target.",
+        "Poison Tower Toxic Surge projectile now uses a larger, darker visual than regular auto attacks.",
+        "Tower balance/pricing updated: Breaker cost is now 200, Poison cost is now 250.",
+        "Tower order updated where relevant (shop, shortcuts, codex): Blizzard now appears before Breaker."
+      ]
+    },
+    {
+      version: "0.2.50",
+      notes: [
+        "Wave 50 remains baseline spawn pacing, but deviation is expanded: pre-50 is significantly slower, post-50 is significantly faster than before.",
+        "Spawn interval clamp bounds are now dynamic for early/late pacing, fixing the old cap that suppressed early-wave slowdown."
       ]
     }
   ];

@@ -109,7 +109,21 @@ function scaleForWave(base, wave) {
       - t1 * CFG.SPAWN_INTERVAL_MID_STEP
       - t2 * CFG.SPAWN_INTERVAL_LATE_STEP
       - t3 * CFG.SPAWN_INTERVAL_END_STEP;
-    interval = clamp(interval, CFG.SPAWN_INTERVAL_MIN, CFG.SPAWN_INTERVAL_BASE);
+
+    // Keep wave 50 as baseline pacing: slower before 50, faster after 50.
+    // We widen the deviation to make early waves noticeably calmer and late waves denser.
+    const BASELINE_WAVE = 50;
+    const EARLY_MAX_INTERVAL = CFG.SPAWN_INTERVAL_BASE * 1.55;
+    const LATE_MIN_INTERVAL = CFG.SPAWN_INTERVAL_MIN * 0.72;
+    if (w < BASELINE_WAVE) {
+      const earlyT = (BASELINE_WAVE - w) / (BASELINE_WAVE - 1);
+      interval *= (1 + 0.55 * earlyT);
+    } else if (w > BASELINE_WAVE) {
+      const lateT = clamp((w - BASELINE_WAVE) / 70, 0, 1);
+      interval *= (1 - 0.45 * lateT);
+    }
+
+    interval = clamp(interval, LATE_MIN_INTERVAL, EARLY_MAX_INTERVAL);
     return interval;
   }
 

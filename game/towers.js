@@ -393,7 +393,7 @@ const TOWER_DEFS = [
     {
       id: "breaker",
       name: "Breaker Tower",
-      cost: 110,
+      cost: 200,
       autoAttackDesc: "Each auto hit permanently shreds target Armor.",
       skillName: "Shatter Bomb",
       skillManaCost: 25,
@@ -457,7 +457,7 @@ const TOWER_DEFS = [
     {
       id: "poison",
       name: "Poison Tower",
-      cost: 220,
+      cost: 250,
       autoAttackDesc: "Each hit adds +1 poison stack. Each stack deals DOT.",
       skillName: "Toxic Surge",
       skillManaCost: 35,
@@ -1293,6 +1293,19 @@ class Tower {
           }
         };
         if (skillResLocal?.kind==="powershot") visual = { color:"rgba(125,211,252,0.99)", radius:0.155 };
+        if (this.def.id === "poison" && skillResLocal?.kind === "toxic") {
+          visual = {
+            color:"rgba(22,101,52,0.99)",
+            radius:0.19,
+            trail: {
+              color: "rgba(21,128,61,0.62)",
+              life: 0.28,
+              size: 0.13,
+              rise: 0.18,
+              spawnEvery: 0.015
+            }
+          };
+        }
 
         const projSpeed = (this.def.id === "sniper")
           ? Math.max(40, this.getProjectileSpeed() * 6.5)
@@ -1385,7 +1398,7 @@ class Tower {
               const hopDelay = clamp(0.17 / Math.max(0.25, this.AS), 0.03, 0.22);
 
               const doHop = () => {
-                if (remaining <= 0 || !current || current.dead || current.reachedExit) return;
+                if (remaining <= 0 || !current || current.reachedExit) return;
                 if (prevDealtCap <= 0 || chainRawMag <= 0) return;
 
                 let next = null;

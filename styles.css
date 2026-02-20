@@ -1515,6 +1515,16 @@
        COMMON UI
     ========= */
     .pill { padding:6px 10px; border-radius:999px; background:rgba(255,255,255,0.07); font-size:12px; }
+    #speedCycleBtn{
+      width:auto;
+      border-color: rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.07);
+      padding: 6px 10px;
+    }
+    #speedCycleBtn:hover{
+      border-color: rgba(125,211,252,0.55);
+      background: rgba(125,211,252,0.12);
+    }
     h2 { margin:0; font-size:15px; }
     .small { font-size:12px; color:rgba(232,238,252,0.82); line-height:1.35; }
     .hint { font-size:12px; color:rgba(232,238,252,0.72); }

@@ -117,6 +117,11 @@ export function initUI(game, options={}){
   const cheatWaveInput = document.getElementById("cheatWaveInput");
   const cheatWaveGoBtn = document.getElementById("cheatWaveGoBtn");
   const infoModalToggle = document.getElementById("infoModalToggle");
+  const shopTowerOrder = ["archer", "mage", "blizzard", "breaker", "poison", "sniper", "peel"];
+  const getOrderedTowerDefs = () => {
+    const byId = new Map(TOWER_DEFS.map(d => [d.id, d]));
+    return shopTowerOrder.map(id => byId.get(id)).filter(Boolean);
+  };
   let forceLegendary = false;
   function renderShop(){
     shop.innerHTML="";
@@ -130,12 +135,7 @@ export function initUI(game, options={}){
       poison: "PS",
       sniper: "SN"
     };
-    const defs = [...TOWER_DEFS];
-    const peelIdx = defs.findIndex(d => d.id === "peel");
-    if (peelIdx >= 0) {
-      const peelDef = defs.splice(peelIdx, 1)[0];
-      defs.push(peelDef);
-    }
+    const defs = getOrderedTowerDefs();
     for(let i=0; i<defs.length; i++){
       const def = defs[i];
       const btn=document.createElement("button");
@@ -243,14 +243,29 @@ export function initUI(game, options={}){
 
   const speedSlider=document.getElementById("speedSlider");
   const speedLabel=document.getElementById("speedLabel");
+  const speedCycleBtn=document.getElementById("speedCycleBtn");
+  const SPEED_CYCLE_VALUES = [1, 2, 3];
   let lastNonZeroSpeed = 1.0;
   function setSpeed(v){
     if(modalOpen) return;
-    game.gameSpeed=v;
-    if (v > 0) lastNonZeroSpeed = v;
-    speedLabel.textContent=`${v.toFixed(1)}x`;
+    const next = Math.min(3, Math.max(0, Number(v) || 0));
+    game.gameSpeed=next;
+    if (next > 0) lastNonZeroSpeed = next;
+    speedSlider.value = next.toFixed(1);
+    speedLabel.textContent=`${next.toFixed(1)}x`;
   }
   speedSlider.addEventListener("input", ()=>setSpeed(parseFloat(speedSlider.value)));
+  if (speedCycleBtn) {
+    speedCycleBtn.addEventListener("click", () => {
+      if (modalOpen) return;
+      const current = Math.max(0, Number(game.gameSpeed) || 0);
+      let next = SPEED_CYCLE_VALUES[0];
+      if (current >= SPEED_CYCLE_VALUES[2] - 0.001) next = SPEED_CYCLE_VALUES[0];
+      else if (current >= SPEED_CYCLE_VALUES[1] - 0.001) next = SPEED_CYCLE_VALUES[2];
+      else if (current >= SPEED_CYCLE_VALUES[0] - 0.001) next = SPEED_CYCLE_VALUES[1];
+      setSpeed(next);
+    });
+  }
   setSpeed(1.0);
 
   function clearSelection(){
@@ -319,7 +334,7 @@ export function initUI(game, options={}){
     const towerShortcutIdx = TOWER_SHORTCUT_ACTIONS.findIndex(actionId => actionPressed(actionId, ev));
     if (towerShortcutIdx >= 0) {
       const idx = towerShortcutIdx;
-      const shortcutDefs = [...TOWER_DEFS.filter(d => d.id !== "peel"), ...TOWER_DEFS.filter(d => d.id === "peel")];
+      const shortcutDefs = getOrderedTowerDefs();
       const def = shortcutDefs[idx];
       if (def) {
         const btnIdx = shopButtons.findIndex(b => b?.dataset?.theme === def.id);

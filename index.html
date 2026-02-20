@@ -29,8 +29,8 @@
       <div class="menuCodexItems">
         <button type="button" class="menuCodexEntry" data-codex-id="tower:archer"><span>🏹 Archer</span><span class="menuCodexOpenTag">Open</span></button>
         <button type="button" class="menuCodexEntry" data-codex-id="tower:mage"><span>🔮 Mage</span><span class="menuCodexOpenTag">Open</span></button>
-        <button type="button" class="menuCodexEntry" data-codex-id="tower:breaker"><span>🔨 Breaker</span><span class="menuCodexOpenTag">Open</span></button>
         <button type="button" class="menuCodexEntry" data-codex-id="tower:blizzard"><span>❄ Blizzard</span><span class="menuCodexOpenTag">Open</span></button>
+        <button type="button" class="menuCodexEntry" data-codex-id="tower:breaker"><span>🔨 Breaker</span><span class="menuCodexOpenTag">Open</span></button>
         <button type="button" class="menuCodexEntry" data-codex-id="tower:poison"><span>☣ Poison</span><span class="menuCodexOpenTag">Open</span></button>
         <button type="button" class="menuCodexEntry" data-codex-id="tower:sniper"><span>🎯 Sniper</span><span class="menuCodexOpenTag">Open</span></button>
         <button type="button" class="menuCodexEntry" data-codex-id="tower:peel"><span>🛰 Peel</span><span class="menuCodexOpenTag">Open</span></button>
@@ -275,13 +275,13 @@
 
       <div class="panelSection speedPanel">
         <div class="speedHead">
-          <h2>Oyun Hızı</h2>
+          <h2>Game Speed</h2>
           <button id="infoModalToggle" class="infoToggle on" title="Info Modals">i</button>
         </div>
         <div class="sliderWrap">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-            <div class="pill">Speed: <span id="speedLabel">1.0x</span></div>
-            <div class="hint">0x = durur</div>
+            <button id="speedCycleBtn" type="button" class="pill">Speed: <span id="speedLabel">1.0x</span></button>
+            <div class="hint">0x = paused</div>
           </div>
           <input id="speedSlider" type="range" min="0" max="3" step="0.1" value="1" />
         </div>
