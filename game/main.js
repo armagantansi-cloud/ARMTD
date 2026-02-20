@@ -1665,6 +1665,14 @@ function renderMenuPatchNotes(){
         "refreshUI now reuses cached references instead of repeating multiple document.getElementById queries each UI pass.",
         "This trims per-refresh DOM query overhead and keeps the UI refresh path tighter."
       ]
+    },
+    {
+      version: "0.2.54",
+      notes: [
+        "Phase 1 refactor started: hot-path array cleanup now uses in-place compaction instead of repeated per-frame filter allocations.",
+        "Main loop now includes an optional lightweight performance sampler (set window.__armtdPerf = true to print fps/update/draw/ui timings in console).",
+        "HUD alive-count path was tightened to avoid temporary array allocation during UI refresh."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();

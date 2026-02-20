@@ -64,7 +64,7 @@ const PEEL_BUFF_INFO = {
 
 // Versioning: patch (right) for every update, minor (middle) for big updates.
 // Major (left) is increased manually.
-const GAME_VERSION = "0.2.53";
+const GAME_VERSION = "0.2.54";
 const LOG_TIPS = [
   "Tip: Discover each tower's unique skill and prestige skill.",
   "Tip: Towers can reach level 20. Sometimes even higher.",
@@ -108,6 +108,18 @@ function normalizeGridCell(v){
   const n = Math.floor(Number(v) || 0);
   if (n === 1 || n === 2) return n;
   return 0;
+}
+
+function compactInPlace(arr, keep){
+  let w = 0;
+  for (let r = 0; r < arr.length; r += 1) {
+    const item = arr[r];
+    if (!keep(item, r)) continue;
+    if (w !== r) arr[w] = item;
+    w += 1;
+  }
+  arr.length = w;
+  return arr;
 }
 
 function addRoundRectPath(ctx, x, y, w, h, r){
@@ -307,6 +319,7 @@ class Game {
       this._statsDirty = false;
       this._statsFlushTimer = 0;
       this._statsFlushInterval = 1.0;
+      this._perfAcc = { sec: 0, frames: 0, frameMs: 0, updateMs: 0, drawMs: 0, uiMs: 0 };
       this.seenModifierIds = new Set();
       this.modifierIntroOpen = false;
       this.modifierIntroPrevSpeed = 1.0;
@@ -1617,10 +1630,14 @@ class Game {
       }
 
       // Mage prestige aura: towers in range gain mana generation (scaled by Mage magic).
-      const mageAuras = this.towers.filter(t => t.def.id==="mage" && t.prestigeActive > 0);
-      for (const t of this.towers) t._manaGainTempMul = 1;
-      if (mageAuras.length) {
-        for (const m of mageAuras) {
+      let hasMageAura = false;
+      for (const t of this.towers) {
+        t._manaGainTempMul = 1;
+        if (t.def.id === "mage" && t.prestigeActive > 0) hasMageAura = true;
+      }
+      if (hasMageAura) {
+        for (const m of this.towers) {
+          if (m.def.id !== "mage" || m.prestigeActive <= 0) continue;
           const magic = Math.max(0, (m.magicBonus || 0) * (m.perks?.magMul ?? 1) * (m.peelMul?.("mag") ?? 1));
           const auraMul = magePrestigeAuraMulFromMagic(magic);
           const auraRange = m.range + magePrestigeAuraRangeBonusFromMagic(magic);
@@ -1643,7 +1660,7 @@ class Game {
 
       // Projectiles + effects
       for(const p of this.projectiles) p.update(sdt, this);
-      this.projectiles = this.projectiles.filter(p=>!p.dead);
+      compactInPlace(this.projectiles, p => !p.dead);
 
       if (this.deferredActions.length) {
         const pending = this.deferredActions;
@@ -1659,14 +1676,14 @@ class Game {
       }
 
       for(const fx of this.effects) fx.update(sdt);
-      this.effects = this.effects.filter(fx=>!fx.dead);
+      compactInPlace(this.effects, fx => !fx.dead);
 
       for(const r of this.rings) r.update(sdt, this);
-      this.rings = this.rings.filter(r=>!r.dead);
+      compactInPlace(this.rings, r => !r.dead);
 
       // Floaters
       for (const f of this.floaters) f.update(sdt);
-      this.floaters = this.floaters.filter(f => !f.dead);
+      compactInPlace(this.floaters, f => !f.dead);
 
       // Center queue (delay destekli)
       for (const c of this.centerQueue) {
@@ -1680,7 +1697,7 @@ class Game {
         c.delay = (c.delay ?? 0) - dt;
         if ((c.delay ?? 0) < 0) c.life -= dt;
       }
-      this.centerQueue = this.centerQueue.filter(c => (c.life ?? 0) > 0);
+      compactInPlace(this.centerQueue, c => (c.life ?? 0) > 0);
 
       if (this.nextWaveNowGoldBuff.timeLeft > 0) {
         this.nextWaveNowGoldBuff.timeLeft = Math.max(0, this.nextWaveNowGoldBuff.timeLeft - sdt);
@@ -1703,8 +1720,8 @@ class Game {
       }
       if (goldGained > 0) SFX.gold(goldGained);
 
-      this.enemies = this.enemies.filter(e => !(e.dead || e.reachedExit));
-      this.wavesActive = this.wavesActive.filter(w => !w.finished);
+      compactInPlace(this.enemies, e => !(e.dead || e.reachedExit));
+      compactInPlace(this.wavesActive, w => !w.finished);
 
       if (this.waveEndUplinkNotice) {
         this.waveEndUplinkNotice.life -= dt;
@@ -2986,7 +3003,10 @@ class Game {
       if (this.hudKillsEl) this.hudKillsEl.textContent=this.totalKills;
       if (this.hudWaveEl) this.hudWaveEl.textContent=this.currentWave;
 
-      const alive = this.enemies.filter(e => !e.dead && !e.reachedExit).length;
+      let alive = 0;
+      for (const e of this.enemies) {
+        if (!e.dead && !e.reachedExit) alive += 1;
+      }
       let remaining = 0;
       for (const w of this.wavesActive) {
         if (w.finished) continue;
@@ -3492,13 +3512,51 @@ class Game {
       const t=now();
       const dt=clamp(t-this.lastT,0,0.05);
       this.lastT=t;
+      const perfEnabled = !!window.__armtdPerf;
+      const perfFrameStart = perfEnabled ? performance.now() : 0;
+      let perfStart = 0;
 
       this.resizeCanvasToDisplaySize();
+
+      if (perfEnabled) perfStart = performance.now();
       this.update(dt);
+      if (perfEnabled) this._perfAcc.updateMs += (performance.now() - perfStart);
+
+      if (perfEnabled) perfStart = performance.now();
       this.draw();
+      if (perfEnabled) this._perfAcc.drawMs += (performance.now() - perfStart);
+
       this._uiRefreshTimer += dt;
       if (this._uiDirty && this._uiRefreshTimer >= this._uiRefreshInterval) {
+        if (perfEnabled) perfStart = performance.now();
         this.refreshUI(true);
+        if (perfEnabled) this._perfAcc.uiMs += (performance.now() - perfStart);
+      }
+
+      if (perfEnabled) {
+        const acc = this._perfAcc;
+        acc.sec += dt;
+        acc.frames += 1;
+        acc.frameMs += (performance.now() - perfFrameStart);
+        if (acc.sec >= 1.0) {
+          const inv = 1 / Math.max(1, acc.frames);
+          console.debug(
+            `[PERF] fps:${(acc.frames / acc.sec).toFixed(1)} frame:${(acc.frameMs * inv).toFixed(2)}ms update:${(acc.updateMs * inv).toFixed(2)}ms draw:${(acc.drawMs * inv).toFixed(2)}ms ui:${(acc.uiMs * inv).toFixed(2)}ms`
+          );
+          acc.sec = 0;
+          acc.frames = 0;
+          acc.frameMs = 0;
+          acc.updateMs = 0;
+          acc.drawMs = 0;
+          acc.uiMs = 0;
+        }
+      } else if (this._perfAcc.frames > 0) {
+        this._perfAcc.sec = 0;
+        this._perfAcc.frames = 0;
+        this._perfAcc.frameMs = 0;
+        this._perfAcc.updateMs = 0;
+        this._perfAcc.drawMs = 0;
+        this._perfAcc.uiMs = 0;
       }
 
       requestAnimationFrame(()=>this.loop());
