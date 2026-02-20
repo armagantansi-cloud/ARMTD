@@ -1673,6 +1673,14 @@ function renderMenuPatchNotes(){
         "Main loop now includes an optional lightweight performance sampler (set window.__armtdPerf = true to print fps/update/draw/ui timings in console).",
         "HUD alive-count path was tightened to avoid temporary array allocation during UI refresh."
       ]
+    },
+    {
+      version: "0.2.55",
+      notes: [
+        "Phase 1 continues: Game-side DOM access is now routed through a dedicated UI adapter module for cleaner boundary separation.",
+        "Speed slider/label syncing and cheat-panel toggle flow were moved behind the adapter, reducing direct document.getElementById usage in gameplay core.",
+        "This keeps behavior identical while preparing a safer path for deeper UI/gameplay decoupling."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();

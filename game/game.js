@@ -6,6 +6,7 @@ import { ENEMY_TYPES, Enemy, computePrevWaveTotals, listEnemyModifiers } from ".
 import { scaleForWave, waveModifiers, WaveState, setEndlessScalingEnabled, getWaveEnemyCap } from "./waves.js";
 import { TOWER_DEFS, Tower, milestoneTier, buildChoicesForTower, gainCurve, upgradeCostCurve, peelBuffPower, peelBounceCountFromAD } from "./towers.js";
 import { openModal, closeModal, isModalOpen } from "./ui.js";
+import { createGameUiAdapter } from "./ui_adapter.js";
 
 const BOSS_SKILL_INFO = {
   cleanse: { name: "Cleanse", color: "rgba(59,130,246,0.85)" },
@@ -64,7 +65,7 @@ const PEEL_BUFF_INFO = {
 
 // Versioning: patch (right) for every update, minor (middle) for big updates.
 // Major (left) is increased manually.
-const GAME_VERSION = "0.2.54";
+const GAME_VERSION = "0.2.55";
 const LOG_TIPS = [
   "Tip: Discover each tower's unique skill and prestige skill.",
   "Tip: Towers can reach level 20. Sometimes even higher.",
@@ -305,9 +306,11 @@ class Game {
       this.onCampaignClear = null;
       setEndlessScalingEnabled(false);
 
-      this.logEl = document.getElementById("logLines");
+      this.uiAdapter = createGameUiAdapter(document);
+      const ui = this.uiAdapter.refs;
+      this.logEl = ui.logLines;
       this.logMax = 80;
-      this.logTitleEl = document.getElementById("hudLogTitle");
+      this.logTitleEl = ui.hudLogTitle;
       this._startLogged = false;
       this.hoverSpecialChoice = null;
       this.uiHover = { upgrade:false, fast:false };
@@ -325,35 +328,35 @@ class Game {
       this.modifierIntroPrevSpeed = 1.0;
       this.infoModalsEnabled = true;
       this.modifierIntroAutoCloseTimer = null;
-      this.modifierIntroBack = document.getElementById("modifierIntroBack");
-      this.modifierIntroTitle = document.getElementById("modifierIntroTitle");
-      this.modifierIntroText = document.getElementById("modifierIntroText");
-      this.modifierIntroIcon = document.getElementById("modifierIntroIcon");
-      this.modifierIntroCloseBtn = document.getElementById("modifierIntroClose");
+      this.modifierIntroBack = ui.modifierIntroBack;
+      this.modifierIntroTitle = ui.modifierIntroTitle;
+      this.modifierIntroText = ui.modifierIntroText;
+      this.modifierIntroIcon = ui.modifierIntroIcon;
+      this.modifierIntroCloseBtn = ui.modifierIntroClose;
       if (this.modifierIntroCloseBtn) {
         this.modifierIntroCloseBtn.onclick = () => this.closeModifierIntro();
       }
-      this.winBack = document.getElementById("winBack");
-      this.winTime = document.getElementById("winTime");
-      this.winEndBtn = document.getElementById("winEndBtn");
-      this.winEndlessBtn = document.getElementById("winEndlessBtn");
+      this.winBack = ui.winBack;
+      this.winTime = ui.winTime;
+      this.winEndBtn = ui.winEndBtn;
+      this.winEndlessBtn = ui.winEndlessBtn;
       if (this.winEndBtn) this.winEndBtn.onclick = () => this.endRunAfterWin();
       if (this.winEndlessBtn) this.winEndlessBtn.onclick = () => this.enterEndlessMode();
-      this.gameOverBack = document.getElementById("gameOverBack");
-      this.gameOverRestartBtn = document.getElementById("gameOverRestartBtn");
-      this.gameOverMainMenuBtn = document.getElementById("gameOverMainMenuBtn");
-      this.hudGoldEl = document.getElementById("hud_gold");
-      this.hudCoreHpEl = document.getElementById("hud_corehp");
-      this.hudKillsEl = document.getElementById("hud_kills");
-      this.hudWaveEl = document.getElementById("hud_wave");
-      this.hudMobsEl = document.getElementById("hud_mobs");
-      this.mapNameEl = document.getElementById("mapName");
-      this.startWaveBtnEl = document.getElementById("startWaveBtn");
-      this.nextWaveNowBtnEl = document.getElementById("nextWaveNowBtn");
-      this.selectedInfoHudEl = document.getElementById("selectedInfoHud");
-      this.upgradeBtnHudEl = document.getElementById("upgradeBtnHud");
-      this.fastUpgradeBtnHudEl = document.getElementById("fastUpgradeBtnHud");
-      this.sellBtnHudEl = document.getElementById("sellBtnHud");
+      this.gameOverBack = ui.gameOverBack;
+      this.gameOverRestartBtn = ui.gameOverRestartBtn;
+      this.gameOverMainMenuBtn = ui.gameOverMainMenuBtn;
+      this.hudGoldEl = ui.hudGold;
+      this.hudCoreHpEl = ui.hudCoreHp;
+      this.hudKillsEl = ui.hudKills;
+      this.hudWaveEl = ui.hudWave;
+      this.hudMobsEl = ui.hudMobs;
+      this.mapNameEl = ui.mapName;
+      this.startWaveBtnEl = ui.startWaveBtn;
+      this.nextWaveNowBtnEl = ui.nextWaveNowBtn;
+      this.selectedInfoHudEl = ui.selectedInfoHud;
+      this.upgradeBtnHudEl = ui.upgradeBtnHud;
+      this.fastUpgradeBtnHudEl = ui.fastUpgradeBtnHud;
+      this.sellBtnHudEl = ui.sellBtnHud;
       this.onGameOverMainMenu = null;
       if (this.gameOverRestartBtn) this.gameOverRestartBtn.onclick = () => this.restart();
       if (this.gameOverMainMenuBtn) {
@@ -458,11 +461,7 @@ class Game {
     }
 
     syncSpeedUI(v){
-      const speed = Number(v);
-      const slider = document.getElementById("speedSlider");
-      const label = document.getElementById("speedLabel");
-      if (slider) slider.value = speed.toFixed(1);
-      if (label) label.textContent = `${speed.toFixed(1)}x`;
+      this.uiAdapter.syncSpeed(v);
     }
 
     addScreenShake(power=0.06, duration=0.20){
@@ -1455,8 +1454,7 @@ class Game {
           choice.apply(tower);
           closeModal();
           this.gameSpeed = this.prevSpeedBeforeModal;
-          document.getElementById("speedSlider").value = this.gameSpeed.toFixed(1);
-          document.getElementById("speedLabel").textContent = `${this.gameSpeed.toFixed(1)}x`;
+          this.syncSpeedUI(this.gameSpeed);
         },
         (choice) => {
           this.hoverSpecialChoice = choice || null;
@@ -1465,8 +1463,7 @@ class Game {
 
       this.prevSpeedBeforeModal = this.gameSpeed;
       this.gameSpeed = 0;
-      document.getElementById("speedSlider").value = "0";
-      document.getElementById("speedLabel").textContent = `0.0x`;
+      this.syncSpeedUI(0);
     }
 
     setGameOver(){
@@ -1756,10 +1753,7 @@ class Game {
       if (text === "Signal online: towers are operational.") {
         line.classList.add("logCheatToggle");
         line.title = "Toggle test panel";
-        line.addEventListener("click", () => {
-          const panel = document.getElementById("cheatPanel");
-          if (panel) panel.classList.toggle("hidden");
-        });
+        line.addEventListener("click", () => this.uiAdapter.toggleCheatPanel());
       }
       this.logEl.appendChild(line);
 
