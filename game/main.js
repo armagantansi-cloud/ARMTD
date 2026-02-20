@@ -1705,6 +1705,13 @@ function renderMenuPatchNotes(){
         "EffectRing hit checks, projectile retargeting, drift collision candidate selection and pass-radius checks were moved off full enemy-list loops.",
         "This further reduces combat-frame query cost while preserving existing gameplay behavior."
       ]
+    },
+    {
+      version: "0.2.59",
+      notes: [
+        "Bugfix: Special Upgrade hover preview in Selected panel now updates live again while modal is open.",
+        "Hover-change callback now forces an immediate UI refresh so preview stats/skill deltas render without waiting for gameplay ticks."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();
