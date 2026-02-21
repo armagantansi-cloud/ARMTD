@@ -15,7 +15,7 @@ import {
 const RUN_SAVE_KEY = "armtd_run_save_v1";
 const MAP_PROGRESS_KEY = "armtd_map_progress_v1";
 const MAP_PROGRESS_SCHEMA = 1;
-const MAP_CARD_COUNT = 9;
+const MAP_CARD_COUNT = Math.max(1, Number(CONTENT_REGISTRY.maps.campaignCardCount) || 1);
 const MAP_PAGE_SIZE = 5;
 const MAP_EDITOR_W = 20;
 const MAP_EDITOR_H = 15;
@@ -218,21 +218,7 @@ function towerDefsPeelLast(){
 }
 
 function getMapCatalog(){
-  const firstMap = CONTENT_REGISTRY.maps.get(0);
-  const secondMap = CONTENT_REGISTRY.maps.get(1);
-  const firstName = firstMap?.name ? String(firstMap.name) : "Map 1";
-  const secondName = secondMap?.name ? String(secondMap.name) : "Map 2";
-  return [
-    { id: 0, title: firstName, playable: true, mapIndex: 0, image: "assets/ARMTD_NEO.png" },
-    { id: 1, title: secondName, playable: !!secondMap, mapIndex: secondMap ? 1 : null, image: "assets/ARTMTD_XENO.png" },
-    { id: 2, title: "Template Map 3", playable: false, mapIndex: null, image: "" },
-    { id: 3, title: "Template Map 4", playable: false, mapIndex: null, image: "" },
-    { id: 4, title: "Template Map 5", playable: false, mapIndex: null, image: "" },
-    { id: 5, title: "Template Map 6", playable: false, mapIndex: null, image: "" },
-    { id: 6, title: "Template Map 7", playable: false, mapIndex: null, image: "" },
-    { id: 7, title: "Template Map 8", playable: false, mapIndex: null, image: "" },
-    { id: 8, title: "Template Map 9", playable: false, mapIndex: null, image: "" }
-  ];
+  return CONTENT_REGISTRY.maps.getCampaignCatalog();
 }
 
 function createDefaultMapProgress(){
@@ -1746,6 +1732,14 @@ function renderMenuPatchNotes(){
         "Phase 2 registry migration continued: tower display order is now defined once in CONTENT_REGISTRY and reused by shop/stat/codex consumers.",
         "UI and main-menu tower ordering paths were refactored to call registry ordered-list helpers instead of repeating local order arrays.",
         "This reduces duplicate content-order config and lowers drift risk as new towers are added in future updates."
+      ]
+    },
+    {
+      version: "0.2.65",
+      notes: [
+        "Phase 2 registry migration continued: campaign map card/catalog definitions moved into CONTENT_REGISTRY maps layer.",
+        "Main-menu map select now consumes registry catalog output instead of maintaining local map-card arrays.",
+        "Map progress slot count now derives from registry campaign card count, reducing content drift risk as map cards evolve."
       ]
     }
   ];
