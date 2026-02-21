@@ -1730,6 +1730,14 @@ function renderMenuPatchNotes(){
         "Game/main lookup paths now read through the registry for tower stat counters, save tower restore, map catalog and enemy type naming.",
         "This creates a low-risk data-driven spine for upcoming unlock/content-pack/save-versioning refactors."
       ]
+    },
+    {
+      version: "0.2.62",
+      notes: [
+        "Phase 2 registry migration continued: shop tower listing in UI now reads from CONTENT_REGISTRY instead of direct tower defs import.",
+        "Tower ordering and visuals are unchanged; this is a dependency-boundary cleanup step for safer future content expansion.",
+        "Version and main-screen patch notes were updated to keep incremental refactor history consistent."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();

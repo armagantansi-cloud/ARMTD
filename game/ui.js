@@ -1,7 +1,8 @@
 import { CFG } from "./config.js";
-import { MILESTONES, TOWER_DEFS, setSpecialLegendaryMode } from "./towers.js";
+import { MILESTONES, setSpecialLegendaryMode } from "./towers.js";
 import { SFX } from "./audio.js";
 import { DEFAULT_KEYBINDS, TOWER_SHORTCUT_ACTIONS, isActionPressed } from "./preferences.js";
+import { CONTENT_REGISTRY } from "./content_registry.js";
 
 let modalBack = null;
 let modalTitle = null;
@@ -119,7 +120,7 @@ export function initUI(game, options={}){
   const infoModalToggle = document.getElementById("infoModalToggle");
   const shopTowerOrder = ["archer", "mage", "blizzard", "breaker", "poison", "sniper", "peel"];
   const getOrderedTowerDefs = () => {
-    const byId = new Map(TOWER_DEFS.map(d => [d.id, d]));
+    const byId = CONTENT_REGISTRY.towers.byId;
     return shopTowerOrder.map(id => byId.get(id)).filter(Boolean);
   };
   let forceLegendary = false;
