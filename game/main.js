@@ -1829,6 +1829,14 @@ function renderMenuPatchNotes(){
         "Campaign clear and game-over-to-main-menu flows are routed through the event bus, reducing UI/gameplay coupling.",
         "Legacy callback hooks remain as compatibility fallback in game core while event-based integration becomes the default path."
       ]
+    },
+    {
+      version: "0.2.71",
+      notes: [
+        "Phase 2 whole-check pass added: repository now includes check:phase2 static verification tooling for registry/progression/save-schema/event wiring.",
+        "New phase2 smoke checklist document was added under tools/ to standardize manual regression checks after refactor updates.",
+        "package scripts now include phase2:verify (syntax + phase2 checks) to close the full Phase 2 validation loop."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();

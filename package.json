@@ -1,9 +1,11 @@
 {
   "name": "armtd",
   "private": true,
-  "version": "0.2.60",
+  "version": "0.2.71",
   "scripts": {
     "check:syntax": "node tools/check_syntax.mjs",
-    "phase1:verify": "npm run check:syntax"
+    "check:phase2": "node tools/check_phase2.mjs",
+    "phase1:verify": "npm run check:syntax",
+    "phase2:verify": "npm run check:syntax && npm run check:phase2"
   }
 }
