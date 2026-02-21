@@ -1053,7 +1053,7 @@ const MENU_CODEX_DETAIL_DATA = {
 const MENU_CODEX_TAB_ORDER = ["tower", "mob", "effect"];
 const MENU_CODEX_TOWER_IDS = CONTENT_REGISTRY.towers.orderedIds
   .map((id) => `tower:${id}`)
-  .filter((id) => Object.prototype.hasOwnProperty.call(MENU_CODEX_DEFS, id));
+  .filter((id) => Object.prototype.hasOwnProperty.call(MENU_CODEX_DETAIL_DATA, id));
 const MENU_CODEX_IDS_BY_TAB = {
   tower: MENU_CODEX_TOWER_IDS,
   mob: [
@@ -1740,6 +1740,14 @@ function renderMenuPatchNotes(){
         "Phase 2 registry migration continued: campaign map card/catalog definitions moved into CONTENT_REGISTRY maps layer.",
         "Main-menu map select now consumes registry catalog output instead of maintaining local map-card arrays.",
         "Map progress slot count now derives from registry campaign card count, reducing content drift risk as map cards evolve."
+      ]
+    },
+    {
+      version: "0.2.66",
+      notes: [
+        "Hotfix: fixed a menu initialization crash caused by a wrong codex data symbol reference in tower codex id filtering.",
+        "This crash blocked main-menu bindings, making New Game and Codex interactions appear non-functional.",
+        "Codex/New Game menu flows are restored without gameplay balance or save-data behavior changes."
       ]
     }
   ];
