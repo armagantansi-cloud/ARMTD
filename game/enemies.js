@@ -2,7 +2,7 @@ import { CFG } from "./config.js";
 import { clamp, dist2, now, formatCompact, pickN } from "./utils.js";
 import { applyPhysicalDamage, applyMagicDamage } from "./damage.js";
 import { scaleForWave, wavePlan } from "./waves.js";
-import { FloatingText } from "./projectiles.js";
+import { acquireFloatingText } from "./projectiles.js";
 
 const ENEMY_TYPES = {
     runner: { name:"Runner", HP: 155, Speed: 1.30, Armor: 7, MR: 10, Wealth: 10 },
@@ -542,7 +542,7 @@ function computePrevWaveTotals(prevWave) {
             this.frostbiteSource.damageDealt += dealt;
           }
           if (this.game && dealt > 0.5) {
-            this.game.floaters.push(new FloatingText(this.x, this.y - 0.35, `${formatCompact(dealt)}`, CFG.FLOAT_TEXT_LIFE, CFG.FLOAT_TEXT_SIZE, false, false));
+            this.game.floaters.push(acquireFloatingText(this.x, this.y - 0.35, `${formatCompact(dealt)}`, CFG.FLOAT_TEXT_LIFE, CFG.FLOAT_TEXT_SIZE, false, false));
           }
         }
       }
@@ -633,7 +633,7 @@ function computePrevWaveTotals(prevWave) {
       if (showFloat && dealt > 0.5 && this.game) {
         const isCrit = !!sourceTower?._lastShotWasCrit;
         const txt = isCrit ? `💥 ${formatCompact(dealt)}` : `${formatCompact(dealt)}`;
-        this.game.floaters.push(new FloatingText(this.x, this.y - 0.35, txt, CFG.FLOAT_TEXT_LIFE, isCrit ? CFG.FLOAT_TEXT_CRIT_SIZE : CFG.FLOAT_TEXT_SIZE, isCrit, false));
+        this.game.floaters.push(acquireFloatingText(this.x, this.y - 0.35, txt, CFG.FLOAT_TEXT_LIFE, isCrit ? CFG.FLOAT_TEXT_CRIT_SIZE : CFG.FLOAT_TEXT_SIZE, isCrit, false));
       }
 
       if(this.hp<=0){
@@ -694,7 +694,7 @@ function computePrevWaveTotals(prevWave) {
         this.frostbiteDotTime = 0;
         if (this.bossSkills?.cleanse) this.bossSkills.cleanse.timer = this.bossSkills.cleanse.cd;
         if (this.game) {
-          this.game.floaters.push(new FloatingText(this.x, this.y - 0.6, "CLEANSE", 0.9, 14, false, false));
+          this.game.floaters.push(acquireFloatingText(this.x, this.y - 0.6, "CLEANSE", 0.9, 14, false, false));
         }
         return;
       }
@@ -704,7 +704,7 @@ function computePrevWaveTotals(prevWave) {
         this.hp = Math.min(this.maxHP, this.hp + amount);
         if (this.bossSkills?.heal) this.bossSkills.heal.timer = this.bossSkills.heal.cd;
         if (this.game) {
-          this.game.floaters.push(new FloatingText(this.x, this.y - 0.6, `HEAL +${amount}`, 0.9, 14, false, false));
+          this.game.floaters.push(acquireFloatingText(this.x, this.y - 0.6, `HEAL +${amount}`, 0.9, 14, false, false));
         }
         return;
       }
@@ -714,7 +714,7 @@ function computePrevWaveTotals(prevWave) {
         const count = CFG.BOSS_SUMMON_BASE + extra;
         this.game.spawnBossAdds(this, count);
         if (this.bossSkills?.summon) this.bossSkills.summon.timer = this.bossSkills.summon.cd;
-        this.game.floaters.push(new FloatingText(this.x, this.y - 0.6, `SUMMON x${count}`, 0.9, 14, false, false));
+        this.game.floaters.push(acquireFloatingText(this.x, this.y - 0.6, `SUMMON x${count}`, 0.9, 14, false, false));
       }
     }
   }

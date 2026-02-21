@@ -1,7 +1,13 @@
 ﻿import { CFG } from "./config.js";
 import { clamp, dist2, randInt, now, formatCompact, pickN } from "./utils.js";
 import { applyPhysicalDamage, applyMagicDamage } from "./damage.js";
-import { FloatingText, EffectLine, EffectRing, Projectile, FreeProjectile } from "./projectiles.js";
+import {
+  acquireFloatingText,
+  acquireEffectLine,
+  acquireEffectRing,
+  acquireProjectile,
+  acquireFreeProjectile
+} from "./projectiles.js";
 import { SFX } from "./audio.js";
 
 const MILESTONES = new Set([5,10,15,20]);
@@ -964,7 +970,7 @@ class Tower {
         }
         if (!target) return;
 
-        const proj = new FreeProjectile(
+        const proj = acquireFreeProjectile(
           fromTower.x, fromTower.y,
           target.x, target.y,
           this.getProjectileSpeed(),
@@ -995,8 +1001,8 @@ class Tower {
       if (typeof game.recordPeelUplinkCast === "function") {
         game.recordPeelUplinkCast();
       }
-      game.effects.push(new EffectRing(this.x, this.y, this.range * 0.40, 6.0, 0.25, "rgba(56,189,248,0.75)"));
-      game.floaters.push(new FloatingText(this.x, this.y - 0.35, "UPLINK", 0.55, 12, false, false));
+      game.effects.push(acquireEffectRing(this.x, this.y, this.range * 0.40, 6.0, 0.25, "rgba(56,189,248,0.75)"));
+      game.floaters.push(acquireFloatingText(this.x, this.y - 0.35, "UPLINK", 0.55, 12, false, false));
       return true;
     }
 
@@ -1069,7 +1075,7 @@ class Tower {
 
         const makeRing = () => {
           const ringSpeed = Math.max(3.5, this.range*4.0);
-          game.rings.push(new EffectRing(
+          game.rings.push(acquireEffectRing(
             this.x, this.y,
             this.range,
             ringSpeed,
@@ -1157,7 +1163,7 @@ class Tower {
         const base = CFG.SNIPER_CAREPACKAGE_BASE_GOLD + (game.currentWave * CFG.SNIPER_CAREPACKAGE_PER_WAVE);
         const gold = Math.round(base * (1 + magic * 0.010) * 15);
         game.gold += gold;
-        game.floaters.push(new FloatingText(game.map.exit.x+0.5, game.map.exit.y+0.5, `📦 +${formatCompact(gold)}`, 1.1, 18, false, false));
+        game.floaters.push(acquireFloatingText(game.map.exit.x+0.5, game.map.exit.y+0.5, `📦 +${formatCompact(gold)}`, 1.1, 18, false, false));
         game.centerQueue.push({ text:`Carepackage +${gold}g`, life:2.0 });
         game.logEvent(`Carepackage (Prestige): +${gold}`);
         return true;
@@ -1202,13 +1208,13 @@ class Tower {
         const passMagic = (95 + magic * 5.8) * this.perks.dmgMul;
         const dealt = enemy.takeDamage(0, passMagic, this.armorPenPct, this.magicPenFlat, this, true);
         this.damageDealt += dealt;
-        game.effects.push(new EffectLine(enemy.x-0.12, enemy.y, enemy.x+0.12, enemy.y, 0.18, "rgba(34,197,94,0.95)", 3));
+        game.effects.push(acquireEffectLine(enemy.x-0.12, enemy.y, enemy.x+0.12, enemy.y, 0.18, "rgba(34,197,94,0.95)", 3));
       };
 
       const spawnRing = () => {
         const ringRadius = CFG.POISON_BOMB_RADIUS_TILES * 1.35;
         const ringSpeed = Math.max(7.6, ringRadius * 8.4);
-        game.rings.push(new EffectRing(
+        game.rings.push(acquireEffectRing(
           ax, ay,
           ringRadius,
           ringSpeed,
@@ -1219,7 +1225,7 @@ class Tower {
       };
 
       // yavaş ve görünür projectile (patladığı yerde kaybolur)
-      const proj = new FreeProjectile(
+      const proj = acquireFreeProjectile(
         this.x, this.y,
         ax, ay,
         CFG.POISON_PRESTIGE_PROJECTILE_SPEED,
@@ -1326,14 +1332,14 @@ class Tower {
             if (this.def.id === "breaker") {
               const autoShred = breakerAutoShred(this);
               hitEnemy.applyArmorShred(autoShred, srcTower);
-              game.effects.push(new EffectLine(hitEnemy.x, hitEnemy.y-0.06, hitEnemy.x, hitEnemy.y+0.06, 0.20, "rgba(239,68,68,0.9)", 3));
+              game.effects.push(acquireEffectLine(hitEnemy.x, hitEnemy.y-0.06, hitEnemy.x, hitEnemy.y+0.06, 0.20, "rgba(239,68,68,0.9)", 3));
             }
 
             // Breaker skill: AOE bomb with damage + armor shred
             if (skillResLocal?.kind === "breakerBomb") {
               const radiusTiles = Math.max(0.8, skillResLocal.radiusTiles || 1.8);
               const rr2 = radiusTiles * radiusTiles;
-              game.rings.push(new EffectRing(
+              game.rings.push(acquireEffectRing(
                 hitEnemy.x, hitEnemy.y,
                 radiusTiles,
                 Math.max(6.0, radiusTiles * 8.0),
@@ -1366,7 +1372,7 @@ class Tower {
               }
 
               hitEnemy.applyPoison(stacksAdd, perTick, srcTower, this.magicPenFlat);
-              game.effects.push(new EffectLine(hitEnemy.x-0.12, hitEnemy.y, hitEnemy.x+0.12, hitEnemy.y, 0.18, "rgba(34,197,94,0.95)", 3));
+              game.effects.push(acquireEffectLine(hitEnemy.x-0.12, hitEnemy.y, hitEnemy.x+0.12, hitEnemy.y, 0.18, "rgba(34,197,94,0.95)", 3));
             }
 
             // Blizzard: auto attacks always apply slow
@@ -1385,7 +1391,7 @@ class Tower {
             // Sniper: mini-stun (0.1s %100 slow)
             if (this.def.id === "sniper") {
               hitEnemy.applySlow(1.0, 0.10, srcTower);
-              game.effects.push(new EffectLine(this.x, this.y, hitEnemy.x, hitEnemy.y, 0.10, "rgba(248,250,252,0.92)", 2));
+              game.effects.push(acquireEffectLine(this.x, this.y, hitEnemy.x, hitEnemy.y, 0.10, "rgba(248,250,252,0.92)", 2));
             }
 
             // Mage chain: MAGIC ONLY
@@ -1416,9 +1422,9 @@ class Tower {
                 }
                 if (!next) return;
 
-                game.effects.push(new EffectLine(current.x, current.y, next.x, next.y, 0.58, "rgba(56,189,248,1.0)", 6));
-                game.effects.push(new EffectLine(current.x, current.y, next.x, next.y, 0.36, "rgba(186,230,253,0.95)", 2));
-                game.rings.push(new EffectRing(next.x, next.y, 0.62, 6.8, 0.30, "rgba(125,211,252,0.95)"));
+                game.effects.push(acquireEffectLine(current.x, current.y, next.x, next.y, 0.58, "rgba(56,189,248,1.0)", 6));
+                game.effects.push(acquireEffectLine(current.x, current.y, next.x, next.y, 0.36, "rgba(186,230,253,0.95)", 2));
+                game.rings.push(acquireEffectRing(next.x, next.y, 0.62, 6.8, 0.30, "rgba(125,211,252,0.95)"));
                 next.applySlow(0.18, 0.45, srcTower);
 
                 let rawMag = chainRawMag;
@@ -1451,7 +1457,7 @@ class Tower {
         };
 
         if (skillResLocal?.kind === "frostPulse") {
-          game.rings.push(new EffectRing(
+          game.rings.push(acquireEffectRing(
             this.x, this.y,
             this.range,
             Math.max(3.5, this.range * 4.0),
@@ -1472,7 +1478,7 @@ class Tower {
           ));
         }
 
-        game.projectiles.push(new Projectile(this.x, this.y, target, projSpeed, payload, visual, expected, this));
+        game.projectiles.push(acquireProjectile(this.x, this.y, target, projSpeed, payload, visual, expected, this));
       };
 
       fireOnce(skillRes, enemy);

@@ -1837,6 +1837,14 @@ function renderMenuPatchNotes(){
         "New phase2 smoke checklist document was added under tools/ to standardize manual regression checks after refactor updates.",
         "package scripts now include phase2:verify (syntax + phase2 checks) to close the full Phase 2 validation loop."
       ]
+    },
+    {
+      version: "0.2.72",
+      notes: [
+        "Phase 3 perf kickoff: projectiles/effects/floaters now use object pooling to reduce hot-path allocations and GC pressure.",
+        "Tower and enemy transient spawn paths were migrated from direct constructor calls to pooled acquire APIs.",
+        "Main update loop now releases dead projectile/effect/ring/floater instances back to pools during in-place compaction."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();

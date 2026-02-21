@@ -10,6 +10,12 @@ import { createGameUiAdapter } from "./ui_adapter.js";
 import { SpatialIndex } from "./spatial_index.js";
 import { CONTENT_REGISTRY } from "./content_registry.js";
 import { GAME_EVENTS, createEventBus } from "./events.js";
+import {
+  releaseAnyProjectile,
+  releaseAnyEffect,
+  releaseEffectRing,
+  releaseFloatingText
+} from "./projectiles.js";
 
 const BOSS_SKILL_INFO = {
   cleanse: { name: "Cleanse", color: "rgba(59,130,246,0.85)" },
@@ -68,7 +74,7 @@ const PEEL_BUFF_INFO = {
 
 // Versioning: patch (right) for every update, minor (middle) for big updates.
 // Major (left) is increased manually.
-const GAME_VERSION = "0.2.71";
+const GAME_VERSION = "0.2.72";
 const LOG_TIPS = [
   "Tip: Discover each tower's unique skill and prestige skill.",
   "Tip: Towers can reach level 20. Sometimes even higher.",
@@ -115,11 +121,14 @@ function normalizeGridCell(v){
   return 0;
 }
 
-function compactInPlace(arr, keep){
+function compactInPlace(arr, keep, onDrop){
   let w = 0;
   for (let r = 0; r < arr.length; r += 1) {
     const item = arr[r];
-    if (!keep(item, r)) continue;
+    if (!keep(item, r)) {
+      if (onDrop) onDrop(item, r);
+      continue;
+    }
     if (w !== r) arr[w] = item;
     w += 1;
   }
@@ -1880,7 +1889,7 @@ class Game {
 
       // Projectiles + effects
       for(const p of this.projectiles) p.update(sdt, this);
-      compactInPlace(this.projectiles, p => !p.dead);
+      compactInPlace(this.projectiles, p => !p.dead, releaseAnyProjectile);
 
       if (this.deferredActions.length) {
         const pending = this.deferredActions;
@@ -1896,14 +1905,14 @@ class Game {
       }
 
       for(const fx of this.effects) fx.update(sdt);
-      compactInPlace(this.effects, fx => !fx.dead);
+      compactInPlace(this.effects, fx => !fx.dead, releaseAnyEffect);
 
       for(const r of this.rings) r.update(sdt, this);
-      compactInPlace(this.rings, r => !r.dead);
+      compactInPlace(this.rings, r => !r.dead, releaseEffectRing);
 
       // Floaters
       for (const f of this.floaters) f.update(sdt);
-      compactInPlace(this.floaters, f => !f.dead);
+      compactInPlace(this.floaters, f => !f.dead, releaseFloatingText);
 
       // Center queue (delay destekli)
       for (const c of this.centerQueue) {

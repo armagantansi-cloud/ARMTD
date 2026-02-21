@@ -1,8 +1,30 @@
 import { CFG } from "./config.js";
 import { clamp, dist2 } from "./utils.js";
 
+const FLOATING_TEXT_POOL_LIMIT = 512;
+const EFFECT_LINE_POOL_LIMIT = 512;
+const EFFECT_RING_POOL_LIMIT = 256;
+const PROJECTILE_POOL_LIMIT = 512;
+const FREE_PROJECTILE_POOL_LIMIT = 512;
+
+const floatingTextPool = [];
+const effectLinePool = [];
+const effectRingPool = [];
+const projectilePool = [];
+const freeProjectilePool = [];
+
+function pushToPool(pool, item, limit){
+  if (!item) return;
+  if (pool.length >= limit) return;
+  pool.push(item);
+}
+
 class FloatingText {
     constructor(x,y,text, life=CFG.FLOAT_TEXT_LIFE, size=14, isCrit=false, isCenter=false){
+      this.reset(x, y, text, life, size, isCrit, isCenter);
+    }
+
+    reset(x,y,text, life=CFG.FLOAT_TEXT_LIFE, size=14, isCrit=false, isCenter=false){
       this.x=x; this.y=y;
       this.text=text;
       this.life=life;
@@ -12,9 +34,11 @@ class FloatingText {
       this.isCenter=isCenter;
       this.dead=false;
 
+      const safeLife = Math.max(0.0001, life || CFG.FLOAT_TEXT_LIFE || 1);
       const jitterX = (Math.random()*2-1) * CFG.FLOAT_TEXT_SPREAD;
       this.vx = jitterX;
-      this.vy = -CFG.FLOAT_TEXT_RISE / life;
+      this.vy = -CFG.FLOAT_TEXT_RISE / safeLife;
+      return this;
     }
     update(dt){
       this.t -= dt;
@@ -31,10 +55,15 @@ class FloatingText {
   
 class EffectLine {
     constructor(ax,ay,bx,by,lifetime,color,width=3){
+      this.reset(ax, ay, bx, by, lifetime, color, width);
+    }
+
+    reset(ax,ay,bx,by,lifetime,color,width=3){
       this.ax=ax; this.ay=ay; this.bx=bx; this.by=by;
       this.t=lifetime; this.life=lifetime;
       this.color=color; this.width=width;
       this.dead=false;
+      return this;
     }
     update(dt){ this.t-=dt; if(this.t<=0) this.dead=true; }
     alpha(){ return clamp(this.t/this.life, 0, 1); }
@@ -42,6 +71,12 @@ class EffectLine {
 
   class EffectRing {
     constructor(x,y, maxRadiusTiles, speedTilesPerSec, lifetime, color, onHit, width=3){
+      this.hitSet=new Set();
+      this._enemyRangeScratch = [];
+      this.reset(x, y, maxRadiusTiles, speedTilesPerSec, lifetime, color, onHit, width);
+    }
+
+    reset(x,y, maxRadiusTiles, speedTilesPerSec, lifetime, color, onHit, width=3){
       this.x=x; this.y=y;
       this.r=0;
       this.maxR=maxRadiusTiles;
@@ -51,8 +86,9 @@ class EffectLine {
       this.width = width;
       this.dead=false;
       this.onHit=onHit;
-      this.hitSet=new Set();
-      this._enemyRangeScratch = [];
+      this.hitSet.clear();
+      this._enemyRangeScratch.length = 0;
+      return this;
     }
     update(dt, game){
       this.t -= dt;
@@ -88,6 +124,17 @@ class EffectLine {
   
   class Projectile {
     constructor(x,y,target,speed,payload,visual,expectedDealt,sourceTower){
+      this.trailNodes = [];
+      this._enemyRangeScratch = [];
+      this._counted = false;
+      this._spent = false;
+      this.t = null;
+      this.expectedDealt = 0;
+      this.reset(x, y, target, speed, payload, visual, expectedDealt, sourceTower);
+    }
+
+    reset(x,y,target,speed,payload,visual,expectedDealt,sourceTower){
+      this.detachIncoming();
       this.x=x; this.y=y;
       this.t=target;
       this.speed=speed;
@@ -100,7 +147,7 @@ class EffectLine {
       this._spent = false;
 
       this.trailCfg = visual?.trail ?? null;
-      this.trailNodes = [];
+      this.trailNodes.length = 0;
       this._trailSpawnTimer = 0;
       this._drift = false;
       this._dirX = 1;
@@ -118,17 +165,24 @@ class EffectLine {
         this.t.incomingEstimate += this.expectedDealt;
         this._counted=true;
       }
-      this._enemyRangeScratch = [];
+      this._enemyRangeScratch.length = 0;
+      return this;
     }
 
     updateTrail(dt){
       if (!this.trailCfg) return;
 
-      for (const n of this.trailNodes) {
+      const nodes = this.trailNodes;
+      let w = 0;
+      for (let r = 0; r < nodes.length; r += 1) {
+        const n = nodes[r];
         n.t -= dt;
         n.y -= n.rise * dt;
+        if (n.t <= 0) continue;
+        if (w !== r) nodes[w] = n;
+        w += 1;
       }
-      this.trailNodes = this.trailNodes.filter(n => n.t > 0);
+      nodes.length = w;
 
       if (this._spent) return;
 
@@ -293,6 +347,13 @@ class EffectLine {
 
   class FreeProjectile {
     constructor(x,y,tx,ty,speed,visual,onArrive, options={}){
+      this._passHitSet = new Set();
+      this._passLastHit = new Map();
+      this._enemyRangeScratch = [];
+      this.reset(x, y, tx, ty, speed, visual, onArrive, options);
+    }
+
+    reset(x,y,tx,ty,speed,visual,onArrive, options={}){
       this.x=x; this.y=y;
       this.tx=tx; this.ty=ty;
       this.speed=speed;
@@ -306,9 +367,9 @@ class EffectLine {
       this._onPass = options.onPass ?? null;
       this._passRadius = options.passRadiusTiles ?? 0;
       this._passRepeatSec = Math.max(0, options.passRepeatSec ?? 0);
-      this._passHitSet = this._onPass ? new Set() : null;
-      this._passLastHit = this._onPass ? new Map() : null;
-      this._enemyRangeScratch = [];
+      this._passHitSet.clear();
+      this._passLastHit.clear();
+      this._enemyRangeScratch.length = 0;
       this._curveT = 0;
       this._curve = null;
 
@@ -329,6 +390,7 @@ class EffectLine {
         const curveLen = this.approxCurveLength(this.x, this.y, cx, cy, this.tx, this.ty);
         this._curve = { x0: this.x, y0: this.y, cx, cy, x1: this.tx, y1: this.ty, len: curveLen };
       }
+      return this;
     }
 
     approxCurveLength(x0, y0, cx, cy, x1, y1){
@@ -428,8 +490,140 @@ class EffectLine {
     }
   }
 
+function acquireFloatingText(x,y,text, life=CFG.FLOAT_TEXT_LIFE, size=14, isCrit=false, isCenter=false){
+  const item = floatingTextPool.pop();
+  if (item) return item.reset(x, y, text, life, size, isCrit, isCenter);
+  return new FloatingText(x, y, text, life, size, isCrit, isCenter);
+}
+
+function releaseFloatingText(item){
+  if (!item) return;
+  item.dead = true;
+  item.text = "";
+  item.t = 0;
+  item.life = 1;
+  item.isCrit = false;
+  item.isCenter = false;
+  pushToPool(floatingTextPool, item, FLOATING_TEXT_POOL_LIMIT);
+}
+
+function acquireEffectLine(ax,ay,bx,by,lifetime,color,width=3){
+  const item = effectLinePool.pop();
+  if (item) return item.reset(ax, ay, bx, by, lifetime, color, width);
+  return new EffectLine(ax, ay, bx, by, lifetime, color, width);
+}
+
+function releaseEffectLine(item){
+  if (!item) return;
+  item.dead = true;
+  item.color = null;
+  item.t = 0;
+  item.life = 1;
+  pushToPool(effectLinePool, item, EFFECT_LINE_POOL_LIMIT);
+}
+
+function acquireEffectRing(x,y, maxRadiusTiles, speedTilesPerSec, lifetime, color, onHit, width=3){
+  const item = effectRingPool.pop();
+  if (item) return item.reset(x, y, maxRadiusTiles, speedTilesPerSec, lifetime, color, onHit, width);
+  return new EffectRing(x, y, maxRadiusTiles, speedTilesPerSec, lifetime, color, onHit, width);
+}
+
+function releaseEffectRing(item){
+  if (!item) return;
+  item.dead = true;
+  item.onHit = null;
+  item.t = 0;
+  item.life = 1;
+  item.hitSet.clear();
+  item._enemyRangeScratch.length = 0;
+  pushToPool(effectRingPool, item, EFFECT_RING_POOL_LIMIT);
+}
+
+function acquireProjectile(x,y,target,speed,payload,visual,expectedDealt,sourceTower){
+  const item = projectilePool.pop();
+  if (item) return item.reset(x, y, target, speed, payload, visual, expectedDealt, sourceTower);
+  return new Projectile(x, y, target, speed, payload, visual, expectedDealt, sourceTower);
+}
+
+function releaseProjectile(item){
+  if (!item) return;
+  item.detachIncoming();
+  item.dead = true;
+  item.t = null;
+  item.payload = null;
+  item.visual = null;
+  item.trailCfg = null;
+  item.sourceTower = null;
+  item._spent = false;
+  item._drift = false;
+  item.expectedDealt = 0;
+  item.trailNodes.length = 0;
+  item._enemyRangeScratch.length = 0;
+  pushToPool(projectilePool, item, PROJECTILE_POOL_LIMIT);
+}
+
+function acquireFreeProjectile(x,y,tx,ty,speed,visual,onArrive, options={}){
+  const item = freeProjectilePool.pop();
+  if (item) return item.reset(x, y, tx, ty, speed, visual, onArrive, options);
+  return new FreeProjectile(x, y, tx, ty, speed, visual, onArrive, options);
+}
+
+function releaseFreeProjectile(item){
+  if (!item) return;
+  item.dead = true;
+  item.visual = null;
+  item.onArrive = null;
+  item._onPass = null;
+  item._curve = null;
+  item._curveT = 0;
+  item._passHitSet.clear();
+  item._passLastHit.clear();
+  item._enemyRangeScratch.length = 0;
+  pushToPool(freeProjectilePool, item, FREE_PROJECTILE_POOL_LIMIT);
+}
+
+function releaseAnyEffect(item){
+  if (!item) return;
+  if (item instanceof EffectLine) {
+    releaseEffectLine(item);
+    return;
+  }
+  if (item instanceof EffectRing) {
+    releaseEffectRing(item);
+  }
+}
+
+function releaseAnyProjectile(item){
+  if (!item) return;
+  if (item instanceof Projectile) {
+    releaseProjectile(item);
+    return;
+  }
+  if (item instanceof FreeProjectile) {
+    releaseFreeProjectile(item);
+  }
+}
+
   // =========================================================
   // Special upgrade system (milestones)
   // =========================================================
   
-export { FloatingText, EffectLine, EffectRing, Projectile, FreeProjectile };
+export {
+  FloatingText,
+  EffectLine,
+  EffectRing,
+  Projectile,
+  FreeProjectile,
+  acquireFloatingText,
+  releaseFloatingText,
+  acquireEffectLine,
+  releaseEffectLine,
+  acquireEffectRing,
+  releaseEffectRing,
+  acquireProjectile,
+  releaseProjectile,
+  acquireFreeProjectile,
+  releaseFreeProjectile,
+  releaseAnyEffect,
+  releaseAnyProjectile
+};
