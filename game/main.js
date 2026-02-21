@@ -4,6 +4,13 @@ import { SFX } from "./audio.js";
 import { GameMap } from "./map.js";
 import { CONTENT_REGISTRY } from "./content_registry.js";
 import {
+  applyCampaignClearToProgression,
+  isCodexEntryUnlockedByProgression,
+  isMapCardUnlockedByProgression,
+  readProgressionState,
+  writeProgressionState
+} from "./progression.js";
+import {
   KEYBIND_DEFS,
   cloneSettings,
   defaultCodeForAction,
@@ -46,6 +53,7 @@ try {
 
 let settings = cloneSettings(loadSettings());
 applyAudioSettings();
+let progressionState = readProgressionState();
 
 let pauseMenuOpen = false;
 let pauseResumeSpeed = 1.0;
@@ -175,6 +183,7 @@ initUI(game, {
 
 bindMainMenu();
 bindMenuCodex();
+syncMenuCodexEntryLocks();
 bindMapSelect();
 bindMapEditor();
 bindSettingsModal();
@@ -377,12 +386,17 @@ function handleCampaignClear(payload){
   item.stars.star2 = item.stars.star2 || !!stars.star2;
   item.stars.star3 = item.stars.star3 || !!stars.star3;
   writeMapProgress(progress);
+  progressionState = applyCampaignClearToProgression(progressionState, {
+    mapIndex: idx,
+    stars,
+    maxWave
+  });
+  writeProgressionState(progressionState);
+  syncMenuCodexEntryLocks();
 }
 
 function isMapUnlocked(mapIndex, progress){
-  if (mapIndex <= 0) return true;
-  const prev = progress.maps[mapIndex - 1];
-  return !!prev?.stars?.star1;
+  return isMapCardUnlockedByProgression(mapIndex, progress, progressionState);
 }
 
 function escapeHtml(text){
@@ -1111,23 +1125,44 @@ function setActiveCodexTab(tabId){
   }
 }
 
-function getCodexLinearIndex(id){
-  return MENU_CODEX_LINEAR_IDS.indexOf(String(id || ""));
+function getUnlockedCodexIds(){
+  return MENU_CODEX_LINEAR_IDS.filter((id) => isCodexEntryUnlockedByProgression(id, progressionState));
+}
+
+function getCodexFirstUnlockedInTab(tabId){
+  const list = MENU_CODEX_IDS_BY_TAB[tabId] || [];
+  return list.find((id) => isCodexEntryUnlockedByProgression(id, progressionState)) || null;
+}
+
+function syncMenuCodexEntryLocks(){
+  if (!menuCodexPanel) return;
+  const rows = menuCodexPanel.querySelectorAll("[data-codex-id]");
+  for (const row of rows) {
+    if (!(row instanceof HTMLButtonElement)) continue;
+    const id = String(row.getAttribute("data-codex-id") || "");
+    const unlocked = isCodexEntryUnlockedByProgression(id, progressionState);
+    row.disabled = !unlocked;
+    row.classList.toggle("locked", !unlocked);
+    row.title = unlocked ? "" : "Locked";
+    const tag = row.querySelector(".menuCodexOpenTag");
+    if (tag) tag.textContent = unlocked ? "Open" : "Locked";
+  }
 }
 
 function getCodexNeighborId(step){
-  const idx = getCodexLinearIndex(activeMenuCodexId);
-  const total = MENU_CODEX_LINEAR_IDS.length;
+  const unlockedIds = getUnlockedCodexIds();
+  const total = unlockedIds.length;
   if (total <= 0) return null;
-  if (idx < 0) return MENU_CODEX_LINEAR_IDS[0] || null;
+  const idx = unlockedIds.indexOf(String(activeMenuCodexId || ""));
+  if (idx < 0) return unlockedIds[0] || null;
   let nextIdx = idx + step;
   if (nextIdx < 0) nextIdx = total - 1;
   if (nextIdx >= total) nextIdx = 0;
-  return MENU_CODEX_LINEAR_IDS[nextIdx];
+  return unlockedIds[nextIdx];
 }
 
 function updateCodexPagerState(){
-  const hasEntries = MENU_CODEX_LINEAR_IDS.length > 0;
+  const hasEntries = getUnlockedCodexIds().length > 0;
   if (menuCodexPrevBtn) menuCodexPrevBtn.disabled = !hasEntries;
   if (menuCodexNextBtn) menuCodexNextBtn.disabled = !hasEntries;
 }
@@ -1344,6 +1379,7 @@ function closeMenuCodexDetail(){
 }
 
 function openMenuCodexDetail(id){
+  if (!isCodexEntryUnlockedByProgression(id, progressionState)) return;
   const entry = getMenuCodexEntry(id);
   if (!entry || !menuCodexDetailTitle || !menuCodexDetailRows || !menuCodexDetailNotes) return;
   activeMenuCodexId = id;
@@ -1369,6 +1405,7 @@ function bindMenuCodex(){
       if (!target) return;
       const id = String(target.getAttribute("data-codex-id") || "");
       if (!id) return;
+      if (!isCodexEntryUnlockedByProgression(id, progressionState)) return;
       ev.preventDefault();
       ev.stopPropagation();
       openMenuCodexDetail(id);
@@ -1385,13 +1422,17 @@ function bindMenuCodex(){
   for (const row of getCodexTabButtons()) {
     if (!row.el) continue;
     row.el.onclick = () => {
-      const targetList = MENU_CODEX_IDS_BY_TAB[row.tab] || [];
-      if (!targetList.length) return;
+      const firstUnlocked = getCodexFirstUnlockedInTab(row.tab);
+      if (!firstUnlocked) return;
       if (activeMenuCodexId && getCodexTabFromId(activeMenuCodexId) === row.tab) {
-        openMenuCodexDetail(activeMenuCodexId);
+        if (isCodexEntryUnlockedByProgression(activeMenuCodexId, progressionState)) {
+          openMenuCodexDetail(activeMenuCodexId);
+          return;
+        }
+        openMenuCodexDetail(firstUnlocked);
         return;
       }
-      openMenuCodexDetail(targetList[0]);
+      openMenuCodexDetail(firstUnlocked);
     };
   }
   if (menuCodexPrevBtn) {
@@ -1756,6 +1797,14 @@ function renderMenuPatchNotes(){
         "Phase 2.6 started: run save schema upgraded to v2 with explicit migration support from v1.",
         "Continue flow now auto-migrates legacy saves during load and rewrites them in current schema after successful restore.",
         "Save normalization/validation was centralized in game runtime to reduce schema-coupling risk for upcoming progression/unlock changes."
+      ]
+    },
+    {
+      version: "0.2.68",
+      notes: [
+        "Phase 2.7 started: a new progression module was added to persist unlock-oriented state separately from map/save runtime data.",
+        "Map unlock decisions now route through progression-aware APIs (with existing star-based behavior preserved as fallback).",
+        "Main-menu codex entry handling is now lock-aware and wired to progression checks for future content-gating rollout."
       ]
     }
   ];
