@@ -67,7 +67,7 @@ const PEEL_BUFF_INFO = {
 
 // Versioning: patch (right) for every update, minor (middle) for big updates.
 // Major (left) is increased manually.
-const GAME_VERSION = "0.2.66";
+const GAME_VERSION = "0.2.67";
 const LOG_TIPS = [
   "Tip: Discover each tower's unique skill and prestige skill.",
   "Tip: Towers can reach level 20. Sometimes even higher.",
@@ -83,7 +83,8 @@ const LOG_TIPS = [
 const START_GOLD_BASE = 150;
 const START_GOLD_REWARD_KEY = "armtd_start_gold_reward_v1";
 const START_CORE_HP = 25;
-const RUN_SAVE_SCHEMA = 1;
+const RUN_SAVE_SCHEMA = 2;
+const RUN_SAVE_MIN_SUPPORTED_SCHEMA = 1;
 const PERSISTENT_STATS_KEY = "armtd_stats_lifetime_v1";
 const TOWER_DEF_BY_ID = CONTENT_REGISTRY.towers.byId;
 
@@ -256,6 +257,81 @@ function getCampaignMapDef(rawIndex){
   return CONTENT_REGISTRY.maps.get(safe) || CONTENT_REGISTRY.maps.get(0);
 }
 
+function createRunSaveMeta(raw){
+  const src = raw && typeof raw === "object" ? raw : {};
+  const migratedFromSchema = Number.isFinite(Number(src.migratedFromSchema))
+    ? Math.floor(Number(src.migratedFromSchema))
+    : null;
+  const migratedAt = Number.isFinite(Number(src.migratedAt))
+    ? Math.floor(Number(src.migratedAt))
+    : null;
+  return {
+    source: String(src.source || "runtime"),
+    migratedFromSchema,
+    migratedAt
+  };
+}
+
+function migrateRunSaveV1ToV2(raw){
+  if (!raw || typeof raw !== "object") return null;
+  const base = { ...raw };
+  base.schema = 2;
+  base.gameVersion = String(base.gameVersion || "unknown");
+  base.savedAt = Math.floor(clampNumber(base.savedAt, 0, Date.now()));
+  base.meta = createRunSaveMeta({
+    source: "runtime",
+    migratedFromSchema: 1,
+    migratedAt: Date.now()
+  });
+  return base;
+}
+
+function migrateRunSaveToCurrent(raw){
+  if (!raw || typeof raw !== "object") return null;
+  const schema = Math.floor(clampNumber(raw.schema, 0, 0));
+  if (schema > RUN_SAVE_SCHEMA || schema < RUN_SAVE_MIN_SUPPORTED_SCHEMA) return null;
+  if (schema === RUN_SAVE_SCHEMA) return raw;
+  let out = raw;
+  let cursor = schema;
+  while (cursor < RUN_SAVE_SCHEMA) {
+    if (cursor === 1) {
+      out = migrateRunSaveV1ToV2(out);
+      cursor = 2;
+      continue;
+    }
+    return null;
+  }
+  return out;
+}
+
+function normalizeRunSaveData(raw){
+  const migrated = migrateRunSaveToCurrent(raw);
+  if (!migrated || typeof migrated !== "object") return null;
+  const customMapDef = normalizeMapDef(migrated.customMapDef);
+  const isCustomMapRun = !!migrated.isCustomMapRun && !!customMapDef;
+  const stats = normalizeRunStats(migrated.stats);
+  const totalKills = Math.floor(clampNumber(migrated.totalKills, 0, 0));
+  stats.totalKills = Math.max(stats.totalKills, totalKills);
+  return {
+    schema: RUN_SAVE_SCHEMA,
+    gameVersion: String(migrated.gameVersion || "unknown"),
+    savedAt: Math.floor(clampNumber(migrated.savedAt, 0, Date.now())),
+    mapIndex: clampCampaignMapIndex(migrated.mapIndex),
+    gold: Math.floor(clampNumber(migrated.gold, 0, getStartingGold())),
+    coreHP: clampNumber(migrated.coreHP, 0, START_CORE_HP),
+    totalKills,
+    resumeWave: Math.floor(clampNumber(migrated.resumeWave, 0, 0)),
+    started: !!migrated.started,
+    endlessMode: !!migrated.endlessMode,
+    isCustomMapRun,
+    customMapDef: isCustomMapRun ? customMapDef : null,
+    towers: Array.isArray(migrated.towers) ? migrated.towers : [],
+    stats,
+    questState: normalizeRunQuestState(migrated.questState),
+    meta: createRunSaveMeta(migrated.meta)
+  };
+}
+
 class Game {
     constructor(canvas){
       this.cv=canvas;
@@ -319,6 +395,7 @@ class Game {
       this.winModalOpen = false;
       this.runStartMs = performance.now();
       this.runClearSec = 0;
+      this._lastLoadMigrationFromSchema = null;
       this.runStats = createEmptyRunStats();
       this.lifetimeStats = readPersistentStats();
       this.runQuestState = createEmptyRunQuestState();
@@ -644,6 +721,10 @@ class Game {
       return normalizeRunQuestState(this.runQuestState);
     }
 
+    getLastLoadMigrationSchema(){
+      return this._lastLoadMigrationFromSchema;
+    }
+
     evaluateCampaignStars(){
       const quest = this.getRunQuestSnapshot();
       const cleared = quest.campaignCleared || this.currentWave >= 100;
@@ -831,19 +912,20 @@ class Game {
         schema: RUN_SAVE_SCHEMA,
         gameVersion: GAME_VERSION,
         savedAt: Date.now(),
+        meta: createRunSaveMeta({ source: "runtime" }),
         ...state
       };
     }
 
     loadRunSave(saveData){
-      if (!saveData || typeof saveData !== "object") return false;
-      const schema = Math.floor(clampNumber(saveData.schema, 0, 0));
-      if (schema !== RUN_SAVE_SCHEMA) return false;
+      const normalizedSave = normalizeRunSaveData(saveData);
+      if (!normalizedSave) return false;
+      this._lastLoadMigrationFromSchema = normalizedSave.meta?.migratedFromSchema;
 
       this.restart();
 
-      const safeMap = clampCampaignMapIndex(saveData.mapIndex);
-      const saveCustomMap = normalizeMapDef(saveData.customMapDef);
+      const safeMap = clampCampaignMapIndex(normalizedSave.mapIndex);
+      const saveCustomMap = normalizeMapDef(normalizedSave.customMapDef);
       this.mapIndex = safeMap;
       if (saveCustomMap) {
         this.map = new GameMap(saveCustomMap);
@@ -855,15 +937,15 @@ class Game {
       this.useMapBackground = !this.isCustomMapRun;
       this.refreshMapBackground();
 
-      this.gold = Math.floor(clampNumber(saveData.gold, 0, getStartingGold()));
-      this.coreHP = clampNumber(saveData.coreHP, 0, START_CORE_HP);
-      this.totalKills = Math.floor(clampNumber(saveData.totalKills, 0, 0));
-      this.runStats = normalizeRunStats(saveData.stats);
+      this.gold = Math.floor(clampNumber(normalizedSave.gold, 0, getStartingGold()));
+      this.coreHP = clampNumber(normalizedSave.coreHP, 0, START_CORE_HP);
+      this.totalKills = Math.floor(clampNumber(normalizedSave.totalKills, 0, 0));
+      this.runStats = normalizeRunStats(normalizedSave.stats);
       this.runStats.totalKills = Math.max(this.runStats.totalKills, this.totalKills);
-      this.runQuestState = normalizeRunQuestState(saveData.questState);
+      this.runQuestState = normalizeRunQuestState(normalizedSave.questState);
       this._campaignClearNotified = false;
 
-      const towersRaw = Array.isArray(saveData.towers) ? saveData.towers : [];
+      const towersRaw = Array.isArray(normalizedSave.towers) ? normalizedSave.towers : [];
       this.towers = [];
       for (const tRaw of towersRaw) {
         const restored = this.restoreTowerState(tRaw);
@@ -897,12 +979,12 @@ class Game {
       this.nextWaveNum = 1;
       this.wavesActive = [];
 
-      this.endlessMode = !!saveData.endlessMode;
+      this.endlessMode = !!normalizedSave.endlessMode;
       setEndlessScalingEnabled(this.endlessMode);
       this.campaignWinShown = false;
       this.runStartMs = performance.now();
 
-      const resumeWave = Math.floor(clampNumber(saveData.resumeWave, 0, 0));
+      const resumeWave = Math.floor(clampNumber(normalizedSave.resumeWave, 0, 0));
       if (resumeWave > 0) {
         this.jumpToWaveForTest(resumeWave);
         this.centerQueue.push({ text: `Continue: Wave ${resumeWave}`, life: 1.8 });
@@ -910,6 +992,9 @@ class Game {
       } else {
         this.logEvent("Save loaded.");
         this.refreshUI(true);
+      }
+      if (Number.isFinite(this._lastLoadMigrationFromSchema) && this._lastLoadMigrationFromSchema > 0) {
+        this.logEvent(`Save migrated: v${this._lastLoadMigrationFromSchema} -> v${RUN_SAVE_SCHEMA}.`);
       }
       this.updateMaxWaveSeen(Math.max(resumeWave, this.currentWave));
       return true;

@@ -1749,6 +1749,14 @@ function renderMenuPatchNotes(){
         "This crash blocked main-menu bindings, making New Game and Codex interactions appear non-functional.",
         "Codex/New Game menu flows are restored without gameplay balance or save-data behavior changes."
       ]
+    },
+    {
+      version: "0.2.67",
+      notes: [
+        "Phase 2.6 started: run save schema upgraded to v2 with explicit migration support from v1.",
+        "Continue flow now auto-migrates legacy saves during load and rewrites them in current schema after successful restore.",
+        "Save normalization/validation was centralized in game runtime to reduce schema-coupling risk for upcoming progression/unlock changes."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();
@@ -1981,6 +1989,12 @@ function bindMainMenu(){
         clearRunSave();
         updateContinueButton();
         return;
+      }
+      const migratedFrom = (typeof game.getLastLoadMigrationSchema === "function")
+        ? game.getLastLoadMigrationSchema()
+        : null;
+      if (Number.isFinite(migratedFrom) && migratedFrom > 0) {
+        writeRunSave(game.createRunSaveData());
       }
       closePauseMenuVisual();
       if (!game.isCustomMapRun) {
