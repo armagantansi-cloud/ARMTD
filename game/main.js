@@ -1806,6 +1806,14 @@ function renderMenuPatchNotes(){
         "Map unlock decisions now route through progression-aware APIs (with existing star-based behavior preserved as fallback).",
         "Main-menu codex entry handling is now lock-aware and wired to progression checks for future content-gating rollout."
       ]
+    },
+    {
+      version: "0.2.69",
+      notes: [
+        "Phase 2.8 started: a lightweight event/message bus was added to gameplay core with named event constants.",
+        "Game runtime now emits structured events for run start/restart, wave start/end, tower build/level-up/prestige, enemy kill, campaign clear and game over.",
+        "UI upgrade paths now notify level-change events, creating a safer extension point for upcoming unlock/skill/modifier systems."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();

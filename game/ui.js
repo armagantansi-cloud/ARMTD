@@ -203,6 +203,9 @@ export function initUI(game, options={}){
 
     const lvlBefore = t.level;
     t.upgradeBaseStats(false);
+    if (typeof game.notifyTowerLevelChanged === "function") {
+      game.notifyTowerLevelChanged(t, lvlBefore, "manual_upgrade");
+    }
 
     // Normal milestone modal
     if (t.level !== CFG.PRESTIGE_LEVEL && MILESTONES.has(t.level)) {
@@ -300,6 +303,9 @@ export function initUI(game, options={}){
       t.spentGold += cost;
       const lvlBefore = t.level;
       t.upgradeBaseStats(false);
+      if (typeof game.notifyTowerLevelChanged === "function") {
+        game.notifyTowerLevelChanged(t, lvlBefore, "fast_upgrade");
+      }
 
       if (t.level !== CFG.PRESTIGE_LEVEL && MILESTONES.has(t.level)) {
         game.openMilestoneModal(t);

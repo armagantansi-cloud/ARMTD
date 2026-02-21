@@ -9,6 +9,7 @@ import { openModal, closeModal, isModalOpen } from "./ui.js";
 import { createGameUiAdapter } from "./ui_adapter.js";
 import { SpatialIndex } from "./spatial_index.js";
 import { CONTENT_REGISTRY } from "./content_registry.js";
+import { GAME_EVENTS, createEventBus } from "./events.js";
 
 const BOSS_SKILL_INFO = {
   cleanse: { name: "Cleanse", color: "rgba(59,130,246,0.85)" },
@@ -67,7 +68,7 @@ const PEEL_BUFF_INFO = {
 
 // Versioning: patch (right) for every update, minor (middle) for big updates.
 // Major (left) is increased manually.
-const GAME_VERSION = "0.2.68";
+const GAME_VERSION = "0.2.69";
 const LOG_TIPS = [
   "Tip: Discover each tower's unique skill and prestige skill.",
   "Tip: Towers can reach level 20. Sometimes even higher.",
@@ -401,6 +402,7 @@ class Game {
       this.runQuestState = createEmptyRunQuestState();
       this._campaignClearNotified = false;
       this.onCampaignClear = null;
+      this.events = createEventBus();
       setEndlessScalingEnabled(false);
 
       this.uiAdapter = createGameUiAdapter(document);
@@ -670,6 +672,11 @@ class Game {
         this.lifetimeStats.towerBuildCounts[towerId] += 1;
         this.persistLifetimeStats();
       }
+      this.emitGameEvent(GAME_EVENTS.TOWER_BUILT, {
+        towerId: String(towerId),
+        runCount: this.runStats.towerBuildCounts[towerId] || 0,
+        lifetimeCount: this.lifetimeStats.towerBuildCounts[towerId] || 0
+      });
     }
 
     recordDamage(amount, sourceTower=null){
@@ -700,6 +707,11 @@ class Game {
         this.lifetimeStats.towerKillCounts[towerId] += 1;
       }
       this.persistLifetimeStats();
+      this.emitGameEvent(GAME_EVENTS.ENEMY_KILLED, {
+        sourceTowerId: towerId ? String(towerId) : null,
+        runTotalKills: this.runStats.totalKills,
+        lifetimeTotalKills: this.lifetimeStats.totalKills
+      });
     }
 
     getStatsSnapshot(){
@@ -721,6 +733,43 @@ class Game {
       return normalizeRunQuestState(this.runQuestState);
     }
 
+    onEvent(eventName, handler){
+      return this.events.on(eventName, handler);
+    }
+
+    onceEvent(eventName, handler){
+      return this.events.once(eventName, handler);
+    }
+
+    emitGameEvent(eventName, payload = {}){
+      this.events.emit(eventName, {
+        event: String(eventName || ""),
+        time: performance.now(),
+        ...payload
+      });
+    }
+
+    notifyTowerLevelChanged(tower, fromLevel, reason = "upgrade"){
+      if (!tower || !tower.def?.id) return;
+      const prevLevel = Math.max(0, Math.floor(Number(fromLevel) || 0));
+      const nextLevel = Math.max(0, Math.floor(Number(tower.level) || 0));
+      if (nextLevel <= prevLevel) return;
+      this.emitGameEvent(GAME_EVENTS.TOWER_LEVEL_UP, {
+        towerId: tower.def.id,
+        fromLevel: prevLevel,
+        toLevel: nextLevel,
+        reason
+      });
+      if (prevLevel < CFG.PRESTIGE_LEVEL && nextLevel >= CFG.PRESTIGE_LEVEL) {
+        this.emitGameEvent(GAME_EVENTS.TOWER_PRESTIGE_UNLOCKED, {
+          towerId: tower.def.id,
+          fromLevel: prevLevel,
+          toLevel: nextLevel,
+          reason
+        });
+      }
+    }
+
     getLastLoadMigrationSchema(){
       return this._lastLoadMigrationFromSchema;
     }
@@ -738,14 +787,16 @@ class Game {
     notifyCampaignClearOnce(){
       if (this._campaignClearNotified) return;
       this._campaignClearNotified = true;
-      if (typeof this.onCampaignClear !== "function") return;
-      this.onCampaignClear({
+      const payload = {
         mapIndex: this.mapIndex,
         isCustomMapRun: !!this.isCustomMapRun,
         stars: this.evaluateCampaignStars(),
         maxWave: Math.max(0, Math.floor(this.currentWave || 0)),
         questState: this.getRunQuestSnapshot()
-      });
+      };
+      this.emitGameEvent(GAME_EVENTS.CAMPAIGN_CLEARED, payload);
+      if (typeof this.onCampaignClear !== "function") return;
+      this.onCampaignClear(payload);
     }
 
     getCurrentMapDef(){
@@ -1167,6 +1218,11 @@ class Game {
         const line = LOG_TIPS[Math.floor(Math.random() * LOG_TIPS.length)];
         this.logEvent(line);
       }
+      this.emitGameEvent(GAME_EVENTS.WAVE_STARTED, {
+        waveNum,
+        nextWaveNum: this.nextWaveNum,
+        endlessMode: !!this.endlessMode
+      });
 
       this.refreshUI(true);
     }
@@ -1181,6 +1237,10 @@ class Game {
         this.logEvent("Signal online: towers are operational.");
       }
       this.queueWave(this.nextWaveNum);
+      this.emitGameEvent(GAME_EVENTS.RUN_STARTED, {
+        mapIndex: this.mapIndex,
+        isCustomMapRun: !!this.isCustomMapRun
+      });
     }
 
     nextWaveNow(){
@@ -1592,6 +1652,13 @@ class Game {
         (choice) => {
           this.hoverSpecialChoice = null;
           choice.apply(tower);
+          this.emitGameEvent(GAME_EVENTS.TOWER_SPECIAL_UPGRADE_CHOSEN, {
+            towerId: tower.def?.id || null,
+            towerLevel: tower.level,
+            tier,
+            rarityId: String(choice?.rarityId || "common"),
+            title: String(choice?.title || "")
+          });
           closeModal();
           this.gameSpeed = this.prevSpeedBeforeModal;
           this.syncSpeedUI(this.gameSpeed);
@@ -1615,6 +1682,10 @@ class Game {
       this.showGameOverModal();
       SFX.gameOver();
       this.logEvent("GAME OVER. Core has fallen.");
+      this.emitGameEvent(GAME_EVENTS.GAME_OVER, {
+        waveNum: Math.max(0, this.currentWave || 0),
+        totalKills: Math.max(0, this.totalKills || 0)
+      });
       this.saveHighKills();
     }
 
@@ -1671,6 +1742,10 @@ class Game {
       this.closeModifierIntro();
 
       this.gameOver=false;
+      this.emitGameEvent(GAME_EVENTS.RUN_RESTARTED, {
+        mapIndex: this.mapIndex,
+        isCustomMapRun: !!this.isCustomMapRun
+      });
       this.refreshUI(true);
     }
 
@@ -1872,6 +1947,11 @@ class Game {
       const waveActiveNow = this.isWaveActive();
       if (this._prevWaveActive && !waveActiveNow) {
         this.resolvePeelUplinkWaveEnd();
+        this.emitGameEvent(GAME_EVENTS.WAVE_ENDED, {
+          waveNum: Math.max(0, this.currentWave || 0),
+          nextWaveNum: Math.max(1, this.nextWaveNum || 1),
+          endlessMode: !!this.endlessMode
+        });
       }
       this._prevWaveActive = waveActiveNow;
 
