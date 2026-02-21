@@ -1738,6 +1738,14 @@ function renderMenuPatchNotes(){
         "Tower ordering and visuals are unchanged; this is a dependency-boundary cleanup step for safer future content expansion.",
         "Version and main-screen patch notes were updated to keep incremental refactor history consistent."
       ]
+    },
+    {
+      version: "0.2.63",
+      notes: [
+        "Phase 2 registry migration continued: game runtime map selection/save/load/changeMap flows now resolve campaign maps through CONTENT_REGISTRY.",
+        "Direct MAP_POOL coupling was removed from game core paths; map index clamping is centralized with shared helper functions.",
+        "Behavior remains the same, but this further hardens the codebase for upcoming unlock/content-pack/save-schema refactors."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();

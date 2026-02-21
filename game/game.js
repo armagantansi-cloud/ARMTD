@@ -1,7 +1,7 @@
 ﻿import { CFG } from "./config.js";
 import { clamp, dist2, now, formatCompact, pickN } from "./utils.js";
 import { SFX } from "./audio.js";
-import { MAP_POOL, GameMap } from "./map.js";
+import { GameMap } from "./map.js";
 import { Enemy, computePrevWaveTotals, listEnemyModifiers } from "./enemies.js";
 import { scaleForWave, waveModifiers, WaveState, setEndlessScalingEnabled, getWaveEnemyCap } from "./waves.js";
 import { Tower, milestoneTier, buildChoicesForTower, gainCurve, upgradeCostCurve, peelBuffPower, peelBounceCountFromAD } from "./towers.js";
@@ -67,7 +67,7 @@ const PEEL_BUFF_INFO = {
 
 // Versioning: patch (right) for every update, minor (middle) for big updates.
 // Major (left) is increased manually.
-const GAME_VERSION = "0.2.62";
+const GAME_VERSION = "0.2.63";
 const LOG_TIPS = [
   "Tip: Discover each tower's unique skill and prestige skill.",
   "Tip: Towers can reach level 20. Sometimes even higher.",
@@ -242,13 +242,27 @@ function normalizeMapDef(raw){
   };
 }
 
+function getCampaignMapCount(){
+  return Math.max(1, Math.floor(Number(CONTENT_REGISTRY.maps.count) || 0));
+}
+
+function clampCampaignMapIndex(raw){
+  const max = Math.max(0, getCampaignMapCount() - 1);
+  return Math.min(max, Math.max(0, Math.floor(clampNumber(raw, 0, 0))));
+}
+
+function getCampaignMapDef(rawIndex){
+  const safe = clampCampaignMapIndex(rawIndex);
+  return CONTENT_REGISTRY.maps.get(safe) || CONTENT_REGISTRY.maps.get(0);
+}
+
 class Game {
     constructor(canvas){
       this.cv=canvas;
       this.ctx=canvas.getContext("2d");
 
       this.mapIndex=0;
-      this.map=new GameMap(MAP_POOL[this.mapIndex]);
+      this.map=new GameMap(getCampaignMapDef(this.mapIndex));
       this.isCustomMapRun = false;
       this.useMapBackground = true;
 
@@ -787,7 +801,7 @@ class Game {
       this.updateMaxWaveSeen(Math.max(this.currentWave, resumeWave));
       this.runStats.totalKills = Math.max(this.runStats.totalKills, this.totalKills);
       return {
-        mapIndex: Math.floor(clampNumber(this.mapIndex, 0, Math.max(0, MAP_POOL.length - 1))),
+        mapIndex: clampCampaignMapIndex(this.mapIndex),
         gold: Math.floor(clampNumber(this.gold, 0, getStartingGold())),
         coreHP: clampNumber(this.coreHP, 0, START_CORE_HP),
         totalKills: Math.floor(clampNumber(this.totalKills, 0, 0)),
@@ -828,15 +842,14 @@ class Game {
 
       this.restart();
 
-      const requestedMap = Math.floor(clampNumber(saveData.mapIndex, 0, Math.max(0, MAP_POOL.length - 1)));
-      const safeMap = Math.min(MAP_POOL.length - 1, Math.max(0, requestedMap));
+      const safeMap = clampCampaignMapIndex(saveData.mapIndex);
       const saveCustomMap = normalizeMapDef(saveData.customMapDef);
       this.mapIndex = safeMap;
       if (saveCustomMap) {
         this.map = new GameMap(saveCustomMap);
         this.isCustomMapRun = true;
       } else {
-        this.map = new GameMap(MAP_POOL[this.mapIndex]);
+        this.map = new GameMap(getCampaignMapDef(this.mapIndex));
         this.isCustomMapRun = false;
       }
       this.useMapBackground = !this.isCustomMapRun;
@@ -903,15 +916,14 @@ class Game {
     }
 
     startFreshRun(options = {}){
-      const requestedMap = Math.floor(clampNumber(options?.mapIndex, 0, Math.max(0, MAP_POOL.length - 1)));
-      const safeMap = Math.min(MAP_POOL.length - 1, Math.max(0, requestedMap));
+      const safeMap = clampCampaignMapIndex(options?.mapIndex);
       this.mapIndex = safeMap;
       const customMapDef = normalizeMapDef(options?.customMapDef);
       if (customMapDef) {
         this.map = new GameMap(customMapDef);
         this.isCustomMapRun = true;
       } else {
-        this.map = new GameMap(MAP_POOL[this.mapIndex]);
+        this.map = new GameMap(getCampaignMapDef(this.mapIndex));
         this.isCustomMapRun = false;
       }
       this.useMapBackground = !this.isCustomMapRun;
@@ -973,8 +985,9 @@ class Game {
     }
 
     changeMap(){
-      this.mapIndex = (this.mapIndex + 1) % MAP_POOL.length;
-      this.map = new GameMap(MAP_POOL[this.mapIndex]);
+      const mapCount = getCampaignMapCount();
+      this.mapIndex = (this.mapIndex + 1) % mapCount;
+      this.map = new GameMap(getCampaignMapDef(this.mapIndex));
       this.isCustomMapRun = false;
       this.useMapBackground = true;
       this.refreshMapBackground();
