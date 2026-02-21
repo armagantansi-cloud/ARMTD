@@ -2,6 +2,7 @@ const GAME_EVENTS = Object.freeze({
   RUN_STARTED: "run_started",
   RUN_RESTARTED: "run_restarted",
   GAME_OVER: "game_over",
+  GAME_OVER_MAIN_MENU: "game_over_main_menu",
   WAVE_STARTED: "wave_started",
   WAVE_ENDED: "wave_ended",
   TOWER_BUILT: "tower_built",

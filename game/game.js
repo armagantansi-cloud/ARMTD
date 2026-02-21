@@ -68,7 +68,7 @@ const PEEL_BUFF_INFO = {
 
 // Versioning: patch (right) for every update, minor (middle) for big updates.
 // Major (left) is increased manually.
-const GAME_VERSION = "0.2.69";
+const GAME_VERSION = "0.2.70";
 const LOG_TIPS = [
   "Tip: Discover each tower's unique skill and prestige skill.",
   "Tip: Towers can reach level 20. Sometimes even higher.",
@@ -461,6 +461,10 @@ class Game {
       if (this.gameOverMainMenuBtn) {
         this.gameOverMainMenuBtn.onclick = () => {
           this.hideGameOverModal();
+          this.emitGameEvent(GAME_EVENTS.GAME_OVER_MAIN_MENU, {
+            waveNum: Math.max(0, this.currentWave || 0),
+            totalKills: Math.max(0, this.totalKills || 0)
+          });
           if (typeof this.onGameOverMainMenu === "function") this.onGameOverMainMenu();
         };
       }

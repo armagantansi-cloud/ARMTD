@@ -3,6 +3,7 @@ import { initUI } from "./ui.js";
 import { SFX } from "./audio.js";
 import { GameMap } from "./map.js";
 import { CONTENT_REGISTRY } from "./content_registry.js";
+import { GAME_EVENTS } from "./events.js";
 import {
   applyCampaignClearToProgression,
   isCodexEntryUnlockedByProgression,
@@ -150,14 +151,7 @@ const pauseMenuHandle = document.getElementById("pauseMenuHandle");
 const pauseSaveQuitBtn = document.getElementById("pauseSaveQuitBtn");
 const pauseSettingsBtn = document.getElementById("pauseSettingsBtn");
 const pauseResumeBtn = document.getElementById("pauseResumeBtn");
-game.onCampaignClear = handleCampaignClear;
-game.onGameOverMainMenu = () => {
-  if (!game.isCustomMapRun) {
-    updateMapProgressMaxWave(game.mapIndex, game.getStatsSnapshot().maxWaveSeen);
-  }
-  closePauseMenuVisual();
-  showMainMenu();
-};
+bindGameplayEvents();
 
 initUI(game, {
   getKeybinds: () => settings.keybinds,
@@ -372,6 +366,19 @@ function formatPlayedAt(ts){
   } catch (_) {
     return "Unknown";
   }
+}
+
+function handleGameOverMainMenu(){
+  if (!game.isCustomMapRun) {
+    updateMapProgressMaxWave(game.mapIndex, game.getStatsSnapshot().maxWaveSeen);
+  }
+  closePauseMenuVisual();
+  showMainMenu();
+}
+
+function bindGameplayEvents(){
+  game.onEvent(GAME_EVENTS.CAMPAIGN_CLEARED, handleCampaignClear);
+  game.onEvent(GAME_EVENTS.GAME_OVER_MAIN_MENU, handleGameOverMainMenu);
 }
 
 function handleCampaignClear(payload){
@@ -1813,6 +1820,14 @@ function renderMenuPatchNotes(){
         "Phase 2.8 started: a lightweight event/message bus was added to gameplay core with named event constants.",
         "Game runtime now emits structured events for run start/restart, wave start/end, tower build/level-up/prestige, enemy kill, campaign clear and game over.",
         "UI upgrade paths now notify level-change events, creating a safer extension point for upcoming unlock/skill/modifier systems."
+      ]
+    },
+    {
+      version: "0.2.70",
+      notes: [
+        "Phase 2.9 boundary pass: main-menu progression handlers now subscribe to gameplay events instead of direct game callback properties.",
+        "Campaign clear and game-over-to-main-menu flows are routed through the event bus, reducing UI/gameplay coupling.",
+        "Legacy callback hooks remain as compatibility fallback in game core while event-based integration becomes the default path."
       ]
     }
   ];
