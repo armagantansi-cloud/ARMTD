@@ -118,11 +118,7 @@ export function initUI(game, options={}){
   const cheatWaveInput = document.getElementById("cheatWaveInput");
   const cheatWaveGoBtn = document.getElementById("cheatWaveGoBtn");
   const infoModalToggle = document.getElementById("infoModalToggle");
-  const shopTowerOrder = ["archer", "mage", "blizzard", "breaker", "poison", "sniper", "peel"];
-  const getOrderedTowerDefs = () => {
-    const byId = CONTENT_REGISTRY.towers.byId;
-    return shopTowerOrder.map(id => byId.get(id)).filter(Boolean);
-  };
+  const getOrderedTowerDefs = () => CONTENT_REGISTRY.towers.orderedList();
   let forceLegendary = false;
   function renderShop(){
     shop.innerHTML="";

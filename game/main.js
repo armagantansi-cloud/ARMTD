@@ -214,9 +214,7 @@ function applyReleaseDataResetIfNeeded(){
 }
 
 function towerDefsPeelLast(){
-  const order = ["archer", "mage", "blizzard", "breaker", "poison", "sniper", "peel"];
-  const byId = CONTENT_REGISTRY.towers.byId;
-  return order.map(id => byId.get(id)).filter(Boolean);
+  return CONTENT_REGISTRY.towers.orderedList();
 }
 
 function getMapCatalog(){
@@ -1067,16 +1065,11 @@ const MENU_CODEX_DETAIL_DATA = {
 };
 
 const MENU_CODEX_TAB_ORDER = ["tower", "mob", "effect"];
+const MENU_CODEX_TOWER_IDS = CONTENT_REGISTRY.towers.orderedIds
+  .map((id) => `tower:${id}`)
+  .filter((id) => Object.prototype.hasOwnProperty.call(MENU_CODEX_DEFS, id));
 const MENU_CODEX_IDS_BY_TAB = {
-  tower: [
-    "tower:archer",
-    "tower:mage",
-    "tower:blizzard",
-    "tower:breaker",
-    "tower:poison",
-    "tower:sniper",
-    "tower:peel"
-  ],
+  tower: MENU_CODEX_TOWER_IDS,
   mob: [
     "mob:runner",
     "mob:tank",
@@ -1745,6 +1738,14 @@ function renderMenuPatchNotes(){
         "Phase 2 registry migration continued: game runtime map selection/save/load/changeMap flows now resolve campaign maps through CONTENT_REGISTRY.",
         "Direct MAP_POOL coupling was removed from game core paths; map index clamping is centralized with shared helper functions.",
         "Behavior remains the same, but this further hardens the codebase for upcoming unlock/content-pack/save-schema refactors."
+      ]
+    },
+    {
+      version: "0.2.64",
+      notes: [
+        "Phase 2 registry migration continued: tower display order is now defined once in CONTENT_REGISTRY and reused by shop/stat/codex consumers.",
+        "UI and main-menu tower ordering paths were refactored to call registry ordered-list helpers instead of repeating local order arrays.",
+        "This reduces duplicate content-order config and lowers drift risk as new towers are added in future updates."
       ]
     }
   ];
