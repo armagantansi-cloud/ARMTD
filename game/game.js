@@ -2,12 +2,13 @@
 import { clamp, dist2, now, formatCompact, pickN } from "./utils.js";
 import { SFX } from "./audio.js";
 import { MAP_POOL, GameMap } from "./map.js";
-import { ENEMY_TYPES, Enemy, computePrevWaveTotals, listEnemyModifiers } from "./enemies.js";
+import { Enemy, computePrevWaveTotals, listEnemyModifiers } from "./enemies.js";
 import { scaleForWave, waveModifiers, WaveState, setEndlessScalingEnabled, getWaveEnemyCap } from "./waves.js";
-import { TOWER_DEFS, Tower, milestoneTier, buildChoicesForTower, gainCurve, upgradeCostCurve, peelBuffPower, peelBounceCountFromAD } from "./towers.js";
+import { Tower, milestoneTier, buildChoicesForTower, gainCurve, upgradeCostCurve, peelBuffPower, peelBounceCountFromAD } from "./towers.js";
 import { openModal, closeModal, isModalOpen } from "./ui.js";
 import { createGameUiAdapter } from "./ui_adapter.js";
 import { SpatialIndex } from "./spatial_index.js";
+import { CONTENT_REGISTRY } from "./content_registry.js";
 
 const BOSS_SKILL_INFO = {
   cleanse: { name: "Cleanse", color: "rgba(59,130,246,0.85)" },
@@ -66,7 +67,7 @@ const PEEL_BUFF_INFO = {
 
 // Versioning: patch (right) for every update, minor (middle) for big updates.
 // Major (left) is increased manually.
-const GAME_VERSION = "0.2.60";
+const GAME_VERSION = "0.2.61";
 const LOG_TIPS = [
   "Tip: Discover each tower's unique skill and prestige skill.",
   "Tip: Towers can reach level 20. Sometimes even higher.",
@@ -84,7 +85,7 @@ const START_GOLD_REWARD_KEY = "armtd_start_gold_reward_v1";
 const START_CORE_HP = 25;
 const RUN_SAVE_SCHEMA = 1;
 const PERSISTENT_STATS_KEY = "armtd_stats_lifetime_v1";
-const TOWER_DEF_BY_ID = new Map(TOWER_DEFS.map(def => [def.id, def]));
+const TOWER_DEF_BY_ID = CONTENT_REGISTRY.towers.byId;
 
 function getStartingGold(){
   try {
@@ -96,7 +97,7 @@ function getStartingGold(){
 
 function buildTowerCounter(seed = 0){
   const out = {};
-  for (const def of TOWER_DEFS) out[def.id] = seed;
+  for (const def of CONTENT_REGISTRY.towers.list) out[def.id] = seed;
   return out;
 }
 
@@ -182,7 +183,7 @@ function createEmptyRunQuestState(){
 function normalizeTowerCounter(raw){
   const out = buildTowerCounter(0);
   if (!raw || typeof raw !== "object") return out;
-  for (const def of TOWER_DEFS) {
+  for (const def of CONTENT_REGISTRY.towers.list) {
     out[def.id] = Math.floor(clampNumber(raw[def.id], 0, 0));
   }
   return out;
@@ -3200,7 +3201,7 @@ class Game {
       // Enemy selected
       if(this.selectedEnemy){
         const e=this.selectedEnemy;
-        const type = e.isBoss ? "Boss" : (ENEMY_TYPES[e.typeId]?.name ?? e.typeId);
+        const type = e.isBoss ? "Boss" : (CONTENT_REGISTRY.enemies.get(e.typeId)?.name ?? e.typeId);
         const modifiers = listEnemyModifiers(e);
         const modifier = modifiers[0] || null;
         const modifierLine = modifier

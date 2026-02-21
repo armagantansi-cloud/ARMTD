@@ -1,8 +1,8 @@
 ﻿import { Game, GAME_VERSION } from "./game.js";
 import { initUI } from "./ui.js";
 import { SFX } from "./audio.js";
-import { TOWER_DEFS } from "./towers.js";
-import { MAP_POOL, GameMap } from "./map.js";
+import { GameMap } from "./map.js";
+import { CONTENT_REGISTRY } from "./content_registry.js";
 import {
   KEYBIND_DEFS,
   cloneSettings,
@@ -215,16 +215,18 @@ function applyReleaseDataResetIfNeeded(){
 
 function towerDefsPeelLast(){
   const order = ["archer", "mage", "blizzard", "breaker", "poison", "sniper", "peel"];
-  const byId = new Map(TOWER_DEFS.map(def => [def.id, def]));
+  const byId = CONTENT_REGISTRY.towers.byId;
   return order.map(id => byId.get(id)).filter(Boolean);
 }
 
 function getMapCatalog(){
-  const firstName = MAP_POOL[0]?.name ? String(MAP_POOL[0].name) : "Map 1";
-  const secondName = MAP_POOL[1]?.name ? String(MAP_POOL[1].name) : "Map 2";
+  const firstMap = CONTENT_REGISTRY.maps.get(0);
+  const secondMap = CONTENT_REGISTRY.maps.get(1);
+  const firstName = firstMap?.name ? String(firstMap.name) : "Map 1";
+  const secondName = secondMap?.name ? String(secondMap.name) : "Map 2";
   return [
     { id: 0, title: firstName, playable: true, mapIndex: 0, image: "assets/ARMTD_NEO.png" },
-    { id: 1, title: secondName, playable: !!MAP_POOL[1], mapIndex: MAP_POOL[1] ? 1 : null, image: "assets/ARTMTD_XENO.png" },
+    { id: 1, title: secondName, playable: !!secondMap, mapIndex: secondMap ? 1 : null, image: "assets/ARTMTD_XENO.png" },
     { id: 2, title: "Template Map 3", playable: false, mapIndex: null, image: "" },
     { id: 3, title: "Template Map 4", playable: false, mapIndex: null, image: "" },
     { id: 4, title: "Template Map 5", playable: false, mapIndex: null, image: "" },
@@ -1719,6 +1721,14 @@ function renderMenuPatchNotes(){
         "Phase 1 closing tooling added: repository now includes a standard syntax-check script (tools/check_syntax.mjs) with package scripts.",
         "Perf baseline capture guide and smoke checklist docs were added under tools/ for repeatable validation after each optimization pass.",
         "This closes Phase 1 verification loop: optimize, measure, and run smoke checks with a shared workflow."
+      ]
+    },
+    {
+      version: "0.2.61",
+      notes: [
+        "Phase 2 groundwork started: central content registry module added for tower/enemy/map definition lookups.",
+        "Game/main lookup paths now read through the registry for tower stat counters, save tower restore, map catalog and enemy type naming.",
+        "This creates a low-risk data-driven spine for upcoming unlock/content-pack/save-versioning refactors."
       ]
     }
   ];
