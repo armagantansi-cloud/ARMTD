@@ -1853,6 +1853,13 @@ function renderMenuPatchNotes(){
         "From wave 11 onward, stat pressure now ramps harder than before.",
         "Post-11 ramp is now non-linear, so difficulty growth itself also accelerates as waves progress."
       ]
+    },
+    {
+      version: "0.2.74",
+      notes: [
+        "Quick balance update: wave 1 enemy gold rewards were increased for tutorial flow support.",
+        "The bonus is wave-1-only and does not change wave 2+ economy scaling."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();

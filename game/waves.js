@@ -76,6 +76,7 @@ function scaleForWave(base, wave) {
     const defMultHalf = 1 + (defMult - 1) * 0.5;
     let mr = base.MR * 0.5 * defMultHalf;
     let wealth = base.Wealth * wealthMult;
+    if (w === 1) wealth *= 1.8; // Tutorial easing: extra economy only on wave 1.
 
     const rampMul = pre100PowerRamp(w);
     hp *= rampMul;
