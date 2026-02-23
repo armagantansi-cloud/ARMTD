@@ -1,7 +1,7 @@
 {
   "name": "armtd",
   "private": true,
-  "version": "0.2.74",
+  "version": "0.2.75",
   "scripts": {
     "check:syntax": "node tools/check_syntax.mjs",
     "check:phase2": "node tools/check_phase2.mjs",

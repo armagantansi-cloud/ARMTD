@@ -1860,6 +1860,13 @@ function renderMenuPatchNotes(){
         "Quick balance update: wave 1 enemy gold rewards were increased for tutorial flow support.",
         "The bonus is wave-1-only and does not change wave 2+ economy scaling."
       ]
+    },
+    {
+      version: "0.2.75",
+      notes: [
+        "Early spawn pacing was slowed for tutorial readability: waves 1-10 now have longer spawn intervals.",
+        "Additional targeted easing was added for waves 1, 2 and 3 with extra spawn-interval increases."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();

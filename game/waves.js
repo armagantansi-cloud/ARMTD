@@ -126,6 +126,12 @@ function scaleForWave(base, wave) {
       interval *= (1 - 0.45 * lateT);
     }
 
+    // Early tutorial pacing: first 10 waves are calmer, with extra slow-down on waves 1-3.
+    if (w <= 10) interval *= 1.10;
+    if (w === 1) interval *= 1.38;
+    else if (w === 2) interval *= 1.30;
+    else if (w === 3) interval *= 1.22;
+
     interval = clamp(interval, LATE_MIN_INTERVAL, EARLY_MAX_INTERVAL);
     return interval;
   }
