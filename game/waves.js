@@ -18,17 +18,19 @@ function getWaveEnemyCap(wave){
 function pre100PowerRamp(wave){
   const w = Math.max(1, wave);
   if (w <= 10) {
-    // Wave 1 -> 10: 1x -> 2x
+    // Wave 1 -> 10: early onboarding is a bit softer.
     const t = (w - 1) / 9;
-    return 1 + t * 1;
+    return 1 + t * 0.72; // 1.00x -> 1.72x
   }
   if (w <= 100) {
-    // Wave 10 -> 100: 2x -> 6x
-    const t = (w - 10) / 90;
-    return 2 + t * 4;
+    // Wave 11 -> 100: stronger and increasingly accelerating difficulty.
+    // Non-linear curve increases both growth rate and its growth.
+    const t = (w - 10) / 90; // 0..1
+    const accel = Math.pow(t, 1.28);
+    return 2.02 + t * 4.20 + accel * 1.90; // 2.02x -> 8.12x
   }
-  // 100+ keeps the existing scaling model, with ramp settled at 6x.
-  return 6;
+  // 100+ keeps existing late/endless model, with updated pre-100 settle point.
+  return 8.12;
 }
 
 function scaleForWave(base, wave) {

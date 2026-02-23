@@ -1845,6 +1845,14 @@ function renderMenuPatchNotes(){
         "Tower and enemy transient spawn paths were migrated from direct constructor calls to pooled acquire APIs.",
         "Main update loop now releases dead projectile/effect/ring/floater instances back to pools during in-place compaction."
       ]
+    },
+    {
+      version: "0.2.73",
+      notes: [
+        "Wave difficulty curve retuned: first 10 waves are now softer to improve early-run onboarding.",
+        "From wave 11 onward, stat pressure now ramps harder than before.",
+        "Post-11 ramp is now non-linear, so difficulty growth itself also accelerates as waves progress."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();
