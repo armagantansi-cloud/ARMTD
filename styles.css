@@ -1125,8 +1125,10 @@
       position: relative;
     }
     .mainMenuStars{
-      position: relative;
-      margin: 0 0 10px;
+      position: absolute;
+      top: 10px;
+      right: max(10px, calc(50% - 740px));
+      margin: 0;
       display: inline-flex;
       align-items: center;
       gap: 8px;
@@ -1144,6 +1146,8 @@
         0 0 0 1px rgba(234,179,8,0.16),
         0 8px 20px rgba(0,0,0,0.38),
         inset 0 0 12px rgba(250,204,21,0.18);
+      z-index: 11;
+      pointer-events: none;
     }
     .mainMenuStars::before{
       content: "\2605";
@@ -2078,6 +2082,35 @@
       justify-content:space-between;
       gap:10px;
       font-size: 13px;
+    }
+    .settingsAudioBlock{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      border: 1px solid rgba(148,163,184,0.22);
+      border-radius: 10px;
+      background: rgba(15,23,42,0.36);
+      padding: 8px;
+    }
+    .settingsAudioControl{
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .settingsAudioControl input[type="range"]{
+      flex: 1 1 auto;
+      min-width: 0;
+      max-width: 220px;
+    }
+    .settingsAudioMuteBtn{
+      flex: 0 0 auto;
+      width: auto;
+      min-width: 108px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 1.1;
+      white-space: nowrap;
     }
     .settingsKeybindList{
       max-height: 340px;

@@ -10,8 +10,8 @@
 <body class="mainMenuOpen">
 <div id="mainMenuOverlay" class="mainMenuOverlay">
   <div class="mainMenuBackdrop" aria-hidden="true"></div>
+  <div id="menuTotalStars" class="mainMenuStars mono">Total Stars: 0</div>
   <aside id="menuRarityPanel" class="menuSidePanel menuSideLeft">
-    <div id="menuTotalStars" class="mainMenuStars mono">Total Stars: 0</div>
     <h3>Special Upgrade Rarity</h3>
     <div class="menuRarityList">
       <div class="menuRarityCard rarity-common"><span>Common</span><span>49.9%</span></div>
@@ -345,19 +345,25 @@
     <div class="settingsGrid">
       <div class="settingsCard">
         <h4>Audio</h4>
-        <div class="settingsRow">
-          <span>Master Volume</span>
-          <span id="settingsVolumeValue" class="mono">100%</span>
+        <div class="settingsAudioBlock">
+          <div class="settingsRow">
+            <span>Effects Volume</span>
+            <span id="settingsVolumeValue" class="mono">100%</span>
+          </div>
+          <div class="settingsAudioControl">
+            <input id="settingsVolumeSlider" type="range" min="0" max="100" step="1" value="100" />
+            <button id="settingsMuteBtn" class="settingsAudioMuteBtn">Effects Mute</button>
+          </div>
         </div>
-        <input id="settingsVolumeSlider" type="range" min="0" max="100" step="1" value="100" />
-        <div class="settingsRow">
-          <span>Music Volume</span>
-          <span id="settingsMusicVolumeValue" class="mono">100%</span>
-        </div>
-        <input id="settingsMusicVolumeSlider" type="range" min="0" max="100" step="1" value="100" />
-        <div class="btnRow">
-          <button id="settingsMuteBtn">Mute</button>
-          <button id="settingsMusicMuteBtn">Music Mute</button>
+        <div class="settingsAudioBlock">
+          <div class="settingsRow">
+            <span>Music Volume</span>
+            <span id="settingsMusicVolumeValue" class="mono">100%</span>
+          </div>
+          <div class="settingsAudioControl">
+            <input id="settingsMusicVolumeSlider" type="range" min="0" max="100" step="1" value="100" />
+            <button id="settingsMusicMuteBtn" class="settingsAudioMuteBtn">Music Mute</button>
+          </div>
         </div>
       </div>
 
@@ -418,7 +424,7 @@
   window.__armtdBoot = window.__armtdBoot || { ok: false, startedAt: Date.now() };
 </script>
 <!-- Entry point (Live Server: open this index.html) -->
-<script type="module" src="game/main.js?v=0.2.79"></script>
+<script type="module" src="game/main.js?v=0.2.80"></script>
 <script>
   (() => {
     const RETRY_KEY = "armtd_boot_retry_v1";

@@ -1,3 +1,5 @@
+import { createAdaptiveMusicEngine } from "./adaptive_music.js";
+
 const SFX = (() => {
   let ctx = null;
   let master = null;
@@ -196,25 +198,9 @@ const MUSIC = (() => {
   let volume = 0.20;
   let source = "";
   let audio = null;
-  let ctx = null;
-  let master = null;
-  let scheduler = null;
-  let nextChordTime = 0;
-  let chordIndex = 0;
-  const activeVoices = new Set();
-  const CHORD_SEC = 7.2;
-  const LOOKAHEAD_SEC = 0.8;
-  const SCHEDULER_MS = 120;
+  const adaptive = createAdaptiveMusicEngine();
 
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-  const midiToHz = (midi) => 440 * Math.pow(2, (midi - 69) / 12);
-
-  const CHORDS = [
-    { name: "Cm", notes: [48, 51, 55, 60], pulse: 36 },
-    { name: "EbMaj7", notes: [51, 55, 58, 62], pulse: 39 },
-    { name: "AbMaj9", notes: [44, 48, 51, 58], pulse: 32 },
-    { name: "Bb7sus4", notes: [46, 51, 53, 56], pulse: 34 }
-  ];
 
   const ensureAudio = () => {
     if (audio) return audio;
@@ -222,221 +208,65 @@ const MUSIC = (() => {
     audio.loop = true;
     audio.preload = "auto";
     audio.playsInline = true;
-    applyState();
+    applyMediaState();
     if (source) audio.src = source;
     return audio;
   };
 
-  const ensureCtx = () => {
-    if (!ctx) {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return null;
-      ctx = new Ctx();
-      master = ctx.createGain();
-      master.connect(ctx.destination);
-    }
-    return ctx;
-  };
-
-  const applyState = () => {
+  const applyMediaState = () => {
     if (!audio) return;
     audio.volume = muted ? 0 : volume;
     audio.muted = false;
   };
 
-  const applySynthGain = () => {
-    if (!master || !ctx) return;
-    const t = ctx.currentTime;
-    master.gain.setTargetAtTime(muted ? 0 : volume, t, 0.05);
-  };
-
-  const releaseVoice = (voice) => {
-    if (!voice) return;
-    activeVoices.delete(voice);
-    try { voice.osc.onended = null; } catch (_) {}
-    try { voice.osc.disconnect(); } catch (_) {}
-    try { voice.filter?.disconnect(); } catch (_) {}
-    try { voice.gain.disconnect(); } catch (_) {}
-  };
-
-  const trackVoice = (osc, filter, gain) => {
-    const voice = { osc, filter, gain };
-    activeVoices.add(voice);
-    osc.onended = () => releaseVoice(voice);
-    return voice;
-  };
-
-  const stopAllVoices = () => {
-    for (const voice of Array.from(activeVoices)) {
-      try { voice.osc.stop(); } catch (_) {}
-      releaseVoice(voice);
-    }
-    activeVoices.clear();
-  };
-
-  const spawnPadVoice = (freq, startTime, chordDur, detune = 0, amp = 0.09) => {
-    const c = ensureCtx();
-    if (!c || !master) return;
-
-    const osc = c.createOscillator();
-    const filter = c.createBiquadFilter();
-    const gain = c.createGain();
-    const life = chordDur + 1.0;
-    const endTime = startTime + life;
-
-    osc.type = "sawtooth";
-    osc.frequency.setValueAtTime(freq, startTime);
-    if (detune) osc.detune.setValueAtTime(detune, startTime);
-
-    filter.type = "lowpass";
-    filter.Q.value = 0.75;
-    filter.frequency.setValueAtTime(820, startTime);
-    filter.frequency.linearRampToValueAtTime(1180, startTime + Math.min(2.6, chordDur * 0.45));
-
-    gain.gain.setValueAtTime(0.0001, startTime);
-    gain.gain.exponentialRampToValueAtTime(Math.max(0.001, amp), startTime + 1.8);
-    gain.gain.linearRampToValueAtTime(Math.max(0.001, amp * 0.82), startTime + chordDur * 0.72);
-    gain.gain.exponentialRampToValueAtTime(0.0001, endTime);
-
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(master);
-
-    trackVoice(osc, filter, gain);
-    osc.start(startTime);
-    osc.stop(endTime + 0.02);
-  };
-
-  const spawnPulse = (freq, startTime) => {
-    const c = ensureCtx();
-    if (!c || !master) return;
-    const osc = c.createOscillator();
-    const filter = c.createBiquadFilter();
-    const gain = c.createGain();
-    const dur = 0.32;
-    const endTime = startTime + dur;
-
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(freq, startTime);
-    osc.frequency.exponentialRampToValueAtTime(Math.max(24, freq * 0.93), endTime);
-
-    filter.type = "lowpass";
-    filter.Q.value = 0.4;
-    filter.frequency.setValueAtTime(640, startTime);
-    filter.frequency.linearRampToValueAtTime(420, endTime);
-
-    gain.gain.setValueAtTime(0.0001, startTime);
-    gain.gain.exponentialRampToValueAtTime(0.07, startTime + 0.08);
-    gain.gain.exponentialRampToValueAtTime(0.0001, endTime);
-
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(master);
-
-    trackVoice(osc, filter, gain);
-    osc.start(startTime);
-    osc.stop(endTime + 0.02);
-  };
-
-  const scheduleChord = (when, chordDef) => {
-    if (!chordDef) return;
-    const notes = chordDef.notes || [];
-    if (!notes.length) return;
-    const pulseRoot = midiToHz(chordDef.pulse || notes[0]);
-    for (let i = 0; i < notes.length; i += 1) {
-      const hz = midiToHz(notes[i]);
-      const detune = (i % 2 === 0 ? -3.5 : 2.7);
-      spawnPadVoice(hz, when, CHORD_SEC * 0.92, detune, 0.085);
-      if (i <= 1) {
-        spawnPadVoice(hz * 2, when + 0.14, CHORD_SEC * 0.78, -detune * 0.5, 0.045);
-      }
-    }
-
-    const pulseOffsets = [0.35, 2.05, 3.8, 5.55];
-    for (const off of pulseOffsets) {
-      spawnPulse(pulseRoot, when + off);
-    }
-  };
-
-  const scheduleTick = () => {
-    const c = ensureCtx();
-    if (!c || muted || volume <= 0) return;
-    if (c.state === "suspended") return;
-
-    while (nextChordTime < c.currentTime + LOOKAHEAD_SEC) {
-      const chord = CHORDS[chordIndex];
-      scheduleChord(nextChordTime, chord);
-      nextChordTime += CHORD_SEC;
-      chordIndex = (chordIndex + 1) % CHORDS.length;
-    }
-  };
-
-  const startSynthLoop = () => {
-    const c = ensureCtx();
-    if (!c) return false;
-    applySynthGain();
-    if (c.state === "suspended") c.resume().catch(() => {});
-    if (!Number.isFinite(nextChordTime) || nextChordTime < c.currentTime - 0.5) {
-      nextChordTime = c.currentTime + 0.12;
-      chordIndex = 0;
-    }
-    if (!scheduler) {
-      scheduleTick();
-      scheduler = setInterval(scheduleTick, SCHEDULER_MS);
-    }
-    return true;
-  };
-
-  const stopSynthLoop = () => {
-    if (scheduler) {
-      clearInterval(scheduler);
-      scheduler = null;
-    }
-    stopAllVoices();
-    nextChordTime = 0;
-    chordIndex = 0;
+  const applyAdaptiveState = () => {
+    adaptive.setVolume(volume);
+    adaptive.setMuted(muted);
   };
 
   const setSource = (src) => {
     source = String(src || "").trim();
     if (!source) {
-      if (audio) audio.removeAttribute("src");
+      if (audio) {
+        audio.pause();
+        audio.removeAttribute("src");
+      }
       return source;
     }
 
     const a = ensureAudio();
-    if (source) {
-      try {
-        const nextSrc = new URL(source, window.location.href).toString();
-        if (a.src !== nextSrc) a.src = nextSrc;
-      } catch (_) {
-        if (a.src !== source) a.src = source;
-      }
+    try {
+      const nextSrc = new URL(source, window.location.href).toString();
+      if (a.src !== nextSrc) a.src = nextSrc;
+    } catch (_) {
+      if (a.src !== source) a.src = source;
     }
     return source;
   };
 
   const play = () => {
+    applyAdaptiveState();
     if (source) {
+      adaptive.pause();
       const a = ensureAudio();
       if (!a.src && !source) return false;
-      applyState();
+      applyMediaState();
       a.play().catch(() => {});
       return true;
     }
-    return startSynthLoop();
+    if (audio) audio.pause();
+    return adaptive.play();
   };
 
   const pause = () => {
     if (audio) audio.pause();
-    stopSynthLoop();
+    adaptive.pause();
   };
 
   const setMuted = (v) => {
     muted = !!v;
-    applyState();
-    applySynthGain();
-    if (muted) stopAllVoices();
+    applyMediaState();
+    applyAdaptiveState();
   };
 
   const toggleMuted = () => {
@@ -450,13 +280,36 @@ const MUSIC = (() => {
     const n = Number(v);
     if (!Number.isFinite(n)) return volume;
     volume = clamp(n, 0, 1);
-    applyState();
-    applySynthGain();
-    if (volume <= 0) stopAllVoices();
+    applyMediaState();
+    applyAdaptiveState();
     return volume;
   };
 
   const getVolume = () => volume;
+
+  const setScene = (nextScene) => {
+    adaptive.setScene(nextScene);
+  };
+
+  const onRunStarted = (payload) => {
+    adaptive.onRunStarted(payload || {});
+  };
+
+  const onRunRestarted = (payload) => {
+    adaptive.onRunRestarted(payload || {});
+  };
+
+  const onGameOver = (payload) => {
+    adaptive.onGameOver(payload || {});
+  };
+
+  const onWaveStart = (payload) => {
+    adaptive.onWaveStart(payload || {});
+  };
+
+  const onWaveEnd = (payload) => {
+    adaptive.onWaveEnd(payload || {});
+  };
 
   return {
     setSource,
@@ -466,7 +319,13 @@ const MUSIC = (() => {
     toggleMuted,
     isMuted,
     setVolume,
-    getVolume
+    getVolume,
+    setScene,
+    onRunStarted,
+    onRunRestarted,
+    onGameOver,
+    onWaveStart,
+    onWaveEnd
   };
 })();
 

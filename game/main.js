@@ -411,6 +411,8 @@ function handleGameOverMainMenu(){
   if (!game.isCustomMapRun) {
     updateMapProgressMaxWave(game.mapIndex, game.getStatsSnapshot().maxWaveSeen);
   }
+  MUSIC.onGameOver({ reason: "main_menu" });
+  MUSIC.setScene("menu");
   closePauseMenuVisual();
   showMainMenu();
 }
@@ -418,6 +420,29 @@ function handleGameOverMainMenu(){
 function bindGameplayEvents(){
   game.onEvent(GAME_EVENTS.CAMPAIGN_CLEARED, handleCampaignClear);
   game.onEvent(GAME_EVENTS.GAME_OVER_MAIN_MENU, handleGameOverMainMenu);
+  game.onEvent(GAME_EVENTS.RUN_STARTED, () => {
+    MUSIC.onRunStarted();
+    MUSIC.setScene("game");
+  });
+  game.onEvent(GAME_EVENTS.RUN_RESTARTED, () => {
+    MUSIC.onRunRestarted();
+    MUSIC.setScene("game");
+  });
+  game.onEvent(GAME_EVENTS.GAME_OVER, () => {
+    MUSIC.onGameOver();
+    MUSIC.setScene("menu");
+  });
+  game.onEvent(GAME_EVENTS.WAVE_STARTED, (payload) => {
+    const waveNum = Math.max(1, Math.floor(Number(payload?.waveNum) || 1));
+    const composition = Array.isArray(payload?.composition) ? payload.composition : [];
+    const isBossWave = composition.some(part => String(part?.type || "") === "boss");
+    MUSIC.onWaveStart({ waveNum, isBossWave });
+  });
+  game.onEvent(GAME_EVENTS.WAVE_ENDED, (payload) => {
+    const waveNum = Math.max(1, Math.floor(Number(payload?.waveNum) || 1));
+    const isBossWave = (waveNum % 10) === 0;
+    MUSIC.onWaveEnd({ waveNum, isBossWave });
+  });
 }
 
 function handleCampaignClear(payload){
@@ -863,6 +888,7 @@ function showMainMenu(){
   hideCustomMaps();
   hideMapEditorPage();
   hideMapSelect();
+  MUSIC.setScene("menu");
   refreshMenuTotalStars();
   updateContinueButton();
 }
@@ -873,6 +899,7 @@ function hideMainMenu(){
   hideCustomMaps();
   hideMapEditorPage();
   hideMapSelect();
+  MUSIC.setScene("game");
 }
 
 function hasStartGoldRewardClaimed(){
@@ -1947,6 +1974,15 @@ function renderMenuPatchNotes(){
         "Startup hotfix: fixed main menu lock caused by calling applyAudioSettings before musicInteractionUnlocked initialization.",
         "Main screen controls are now reachable again without ReferenceError on boot."
       ]
+    },
+    {
+      version: "0.2.80",
+      notes: [
+        "Main-menu Total Stars badge moved to top-right for a more compact rarity panel layout.",
+        "Settings audio labels/layout updated: Master Volume renamed to Effects Volume, and each volume row now has its own inline mute button.",
+        "Adaptive music architecture refactored into a dedicated module with dynamic menu/game tempo scaling, wave-driven intensity rise and arpeggio transition phrases.",
+        "Boss music reaction added: bass drops one octave on boss phases and remains in low register for at least 5 seconds even if boss dies quickly."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();
@@ -2183,6 +2219,7 @@ function bindMusicAutoStart(){
   const tryStartMusic = () => {
     if (settings.audio.musicMuted) return;
     if ((settings.audio.musicVolume ?? 0) <= 0) return;
+    MUSIC.setScene(isMainMenuOpen() ? "menu" : "game");
     MUSIC.play();
   };
   const onUnlock = () => {
@@ -2627,7 +2664,7 @@ function syncSettingsUI(){
   const volPct = Math.round(clamp(settings.audio.volume * 100, 0, 100));
   if (settingsVolumeSlider) settingsVolumeSlider.value = String(volPct);
   if (settingsVolumeValue) settingsVolumeValue.textContent = `${volPct}%`;
-  if (settingsMuteBtn) settingsMuteBtn.textContent = settings.audio.muted ? "Unmute" : "Mute";
+  if (settingsMuteBtn) settingsMuteBtn.textContent = settings.audio.muted ? "Effects Unmute" : "Effects Mute";
   const musicVolPct = Math.round(clamp((settings.audio.musicVolume ?? 0) * 100, 0, 100));
   if (settingsMusicVolumeSlider) settingsMusicVolumeSlider.value = String(musicVolPct);
   if (settingsMusicVolumeValue) settingsMusicVolumeValue.textContent = `${musicVolPct}%`;
