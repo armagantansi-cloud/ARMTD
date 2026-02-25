@@ -11,6 +11,7 @@
 <div id="mainMenuOverlay" class="mainMenuOverlay">
   <div class="mainMenuBackdrop" aria-hidden="true"></div>
   <aside id="menuRarityPanel" class="menuSidePanel menuSideLeft">
+    <div id="menuTotalStars" class="mainMenuStars mono">Total Stars: 0</div>
     <h3>Special Upgrade Rarity</h3>
     <div class="menuRarityList">
       <div class="menuRarityCard rarity-common"><span>Common</span><span>49.9%</span></div>
@@ -90,7 +91,6 @@
   </div>
   <div class="mainMenuInner">
     <div class="mainMenuTop">
-      <div id="menuTotalStars" class="mainMenuStars mono">Total Stars: 0</div>
       <h1 class="mainMenuTitle">ARMTD</h1>
     </div>
 
@@ -418,7 +418,7 @@
   window.__armtdBoot = window.__armtdBoot || { ok: false, startedAt: Date.now() };
 </script>
 <!-- Entry point (Live Server: open this index.html) -->
-<script type="module" src="game/main.js?v=0.2.77"></script>
+<script type="module" src="game/main.js?v=0.2.78"></script>
 <script>
   (() => {
     const RETRY_KEY = "armtd_boot_retry_v1";

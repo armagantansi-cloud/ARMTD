@@ -1366,12 +1366,16 @@ class Tower {
           ? Math.max(40, this.getProjectileSpeed() * 6.5)
           : this.getProjectileSpeed();
         const expected = this.expectedDamageAgainst(target);
+        const floatColor = (this.def.id === "archer" && skillResLocal?.kind === "powershot")
+          ? "rgba(96,165,250,0.98)"
+          : null;
 
         const payload = {
           physRaw: pPhys,
           magicRaw: pMag,
           armorPenPct: this.armorPenPct,
           magicPenFlat: this.magicPenFlat,
+          floatColor,
           onHit: (hitEnemy, g, dealt, srcTower) => {
 
             // Breaker auto attack: always shred

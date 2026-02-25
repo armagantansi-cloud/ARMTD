@@ -20,11 +20,11 @@ function pushToPool(pool, item, limit){
 }
 
 class FloatingText {
-    constructor(x,y,text, life=CFG.FLOAT_TEXT_LIFE, size=14, isCrit=false, isCenter=false){
-      this.reset(x, y, text, life, size, isCrit, isCenter);
+    constructor(x,y,text, life=CFG.FLOAT_TEXT_LIFE, size=14, isCrit=false, isCenter=false, color=null){
+      this.reset(x, y, text, life, size, isCrit, isCenter, color);
     }
 
-    reset(x,y,text, life=CFG.FLOAT_TEXT_LIFE, size=14, isCrit=false, isCenter=false){
+    reset(x,y,text, life=CFG.FLOAT_TEXT_LIFE, size=14, isCrit=false, isCenter=false, color=null){
       this.x=x; this.y=y;
       this.text=text;
       this.life=life;
@@ -32,6 +32,7 @@ class FloatingText {
       this.size=size;
       this.isCrit=isCrit;
       this.isCenter=isCenter;
+      this.color = (typeof color === "string" && color.trim()) ? color : null;
       this.dead=false;
 
       const safeLife = Math.max(0.0001, life || CFG.FLOAT_TEXT_LIFE || 1);
@@ -249,7 +250,9 @@ class EffectLine {
         this.payload.armorPenPct,
         this.payload.magicPenFlat,
         this.sourceTower,
-        true
+        true,
+        false,
+        this.payload.floatColor || null
       );
 
       if(this.sourceTower){
@@ -517,10 +520,10 @@ class EffectLine {
     }
   }
 
-function acquireFloatingText(x,y,text, life=CFG.FLOAT_TEXT_LIFE, size=14, isCrit=false, isCenter=false){
+function acquireFloatingText(x,y,text, life=CFG.FLOAT_TEXT_LIFE, size=14, isCrit=false, isCenter=false, color=null){
   const item = floatingTextPool.pop();
-  if (item) return item.reset(x, y, text, life, size, isCrit, isCenter);
-  return new FloatingText(x, y, text, life, size, isCrit, isCenter);
+  if (item) return item.reset(x, y, text, life, size, isCrit, isCenter, color);
+  return new FloatingText(x, y, text, life, size, isCrit, isCenter, color);
 }
 
 function releaseFloatingText(item){
@@ -531,6 +534,7 @@ function releaseFloatingText(item){
   item.life = 1;
   item.isCrit = false;
   item.isCenter = false;
+  item.color = null;
   pushToPool(floatingTextPool, item, FLOATING_TEXT_POOL_LIMIT);
 }
 

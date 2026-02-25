@@ -67,6 +67,7 @@ let dragState = null;
 let mapEditorCodeMode = null;
 let activeMenuCodexId = null;
 let mapSelectPage = 0;
+let musicInteractionUnlocked = false;
 const mapEditorState = {
   tool: "path",
   dragPaint: false,
@@ -180,6 +181,7 @@ initUI(game, {
     return true;
   }
 });
+bindMusicAutoStart();
 
 bindMainMenu();
 bindMenuCodex();
@@ -1930,6 +1932,14 @@ function renderMenuPatchNotes(){
         "Wave-based poison suppression was removed: poison resist/decay scaling is now disabled to prevent unintended late-wave poison stack drop.",
         "Archer Power Shot detail text is now blue with a larger font, and the main-menu total stars badge received a visual polish."
       ]
+    },
+    {
+      version: "0.2.78",
+      notes: [
+        "Archer update adjusted: Power Shot detail text returned to normal; actual Power Shot damage float text is now blue on hit.",
+        "Main-menu total stars badge moved to the top of the Special Upgrade Rarity side panel.",
+        "Added a basic ambient/progressive synth background music loop and wired it to existing Music volume/mute settings."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();
@@ -2152,6 +2162,31 @@ function applyAudioSettings(){
   settings.audio.muted = muted;
   settings.audio.musicVolume = safeMusicVol;
   settings.audio.musicMuted = musicMuted;
+  if (!musicInteractionUnlocked) {
+    MUSIC.pause();
+    return;
+  }
+  if (musicMuted || safeMusicVol <= 0) MUSIC.pause();
+  else MUSIC.play();
+}
+
+function bindMusicAutoStart(){
+  if (bindMusicAutoStart._done) return;
+  bindMusicAutoStart._done = true;
+  const tryStartMusic = () => {
+    if (settings.audio.musicMuted) return;
+    if ((settings.audio.musicVolume ?? 0) <= 0) return;
+    MUSIC.play();
+  };
+  const onUnlock = () => {
+    musicInteractionUnlocked = true;
+    tryStartMusic();
+    applyAudioSettings();
+    window.removeEventListener("pointerdown", onUnlock);
+    window.removeEventListener("keydown", onUnlock);
+  };
+  window.addEventListener("pointerdown", onUnlock, { once: true });
+  window.addEventListener("keydown", onUnlock, { once: true });
 }
 
 function persistSettings(applyAudio = true){

@@ -617,7 +617,7 @@ function computePrevWaveTotals(prevWave) {
     //    applyMagicDamage(magicRaw, this.mr, magicPenFlat)
     // 3) Global savunmasiz kalma carpani (blizzard vuln) eklenir.
     // 4) Son hasar HP'den duser; floater/kill/summon gibi yan etkiler tetiklenir.
-    takeDamage(physRaw, magicRaw, armorPenPct, magicPenFlat, sourceTower, showFloat=true, isDot=false) {
+    takeDamage(physRaw, magicRaw, armorPenPct, magicPenFlat, sourceTower, showFloat=true, isDot=false, floatColor=null) {
       if(this.dead) return 0;
 
       let dealt=0;
@@ -633,7 +633,7 @@ function computePrevWaveTotals(prevWave) {
       if (showFloat && dealt > 0.5 && this.game) {
         const isCrit = !!sourceTower?._lastShotWasCrit;
         const txt = isCrit ? `💥 ${formatCompact(dealt)}` : `${formatCompact(dealt)}`;
-        this.game.floaters.push(acquireFloatingText(this.x, this.y - 0.35, txt, CFG.FLOAT_TEXT_LIFE, isCrit ? CFG.FLOAT_TEXT_CRIT_SIZE : CFG.FLOAT_TEXT_SIZE, isCrit, false));
+        this.game.floaters.push(acquireFloatingText(this.x, this.y - 0.35, txt, CFG.FLOAT_TEXT_LIFE, isCrit ? CFG.FLOAT_TEXT_CRIT_SIZE : CFG.FLOAT_TEXT_SIZE, isCrit, false, floatColor));
       }
 
       if(this.hp<=0){
