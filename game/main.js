@@ -55,6 +55,7 @@ try {
 }
 
 let settings = cloneSettings(loadSettings());
+let musicInteractionUnlocked = false;
 applyAudioSettings();
 let progressionState = readProgressionState();
 
@@ -67,7 +68,6 @@ let dragState = null;
 let mapEditorCodeMode = null;
 let activeMenuCodexId = null;
 let mapSelectPage = 0;
-let musicInteractionUnlocked = false;
 const mapEditorState = {
   tool: "path",
   dragPaint: false,
@@ -1939,6 +1939,13 @@ function renderMenuPatchNotes(){
         "Archer update adjusted: Power Shot detail text returned to normal; actual Power Shot damage float text is now blue on hit.",
         "Main-menu total stars badge moved to the top of the Special Upgrade Rarity side panel.",
         "Added a basic ambient/progressive synth background music loop and wired it to existing Music volume/mute settings."
+      ]
+    },
+    {
+      version: "0.2.79",
+      notes: [
+        "Startup hotfix: fixed main menu lock caused by calling applyAudioSettings before musicInteractionUnlocked initialization.",
+        "Main screen controls are now reachable again without ReferenceError on boot."
       ]
     }
   ];
