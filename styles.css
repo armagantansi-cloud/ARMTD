@@ -1122,6 +1122,20 @@
       display:flex;
       justify-content:center;
       padding-top: 4px;
+      position: relative;
+    }
+    .mainMenuStars{
+      position:absolute;
+      left: 8px;
+      top: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(250,204,21,0.42);
+      background: rgba(2,6,23,0.62);
+      color: rgba(250,204,21,0.98);
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      text-shadow: 0 0 10px rgba(250,204,21,0.30);
     }
     .mainMenuTitle{
       margin:0;

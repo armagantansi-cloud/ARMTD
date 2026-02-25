@@ -90,6 +90,7 @@
   </div>
   <div class="mainMenuInner">
     <div class="mainMenuTop">
+      <div id="menuTotalStars" class="mainMenuStars mono">Stars: 0</div>
       <h1 class="mainMenuTitle">ARMTD</h1>
     </div>
 
@@ -271,6 +272,9 @@
           <input id="cheatWaveInput" type="number" min="1" step="1" value="1" />
           <button id="cheatWaveGoBtn">Wave</button>
         </div>
+        <div class="btnRow">
+          <button id="cheatSpeed10Btn">10x Speed</button>
+        </div>
       </div>
 
       <div class="panelSection speedPanel">
@@ -283,7 +287,7 @@
             <button id="speedCycleBtn" type="button" class="pill">Speed: <span id="speedLabel">1.0x</span></button>
             <div class="hint">0x = paused</div>
           </div>
-          <input id="speedSlider" type="range" min="0" max="3" step="0.1" value="1" />
+          <input id="speedSlider" type="range" min="0" max="10" step="0.1" value="1" />
         </div>
       </div>
     </div>
@@ -346,8 +350,14 @@
           <span id="settingsVolumeValue" class="mono">100%</span>
         </div>
         <input id="settingsVolumeSlider" type="range" min="0" max="100" step="1" value="100" />
+        <div class="settingsRow">
+          <span>Music Volume</span>
+          <span id="settingsMusicVolumeValue" class="mono">100%</span>
+        </div>
+        <input id="settingsMusicVolumeSlider" type="range" min="0" max="100" step="1" value="100" />
         <div class="btnRow">
           <button id="settingsMuteBtn">Mute</button>
+          <button id="settingsMusicMuteBtn">Music Mute</button>
         </div>
       </div>
 
@@ -404,8 +414,38 @@
 
 <div id="perfHud" class="perfHud"></div>
 
+<script>
+  window.__armtdBoot = window.__armtdBoot || { ok: false, startedAt: Date.now() };
+</script>
 <!-- Entry point (Live Server: open this index.html) -->
-<script type="module" src="game/main.js?v=0.2.75"></script>
+<script type="module" src="game/main.js?v=0.2.76"></script>
+<script>
+  (() => {
+    const RETRY_KEY = "armtd_boot_retry_v1";
+    const watchdogMs = 3800;
+    setTimeout(() => {
+      if (window.__armtdBoot?.ok) {
+        try { sessionStorage.removeItem(RETRY_KEY); } catch (_) {}
+        return;
+      }
+      let retried = false;
+      try { retried = sessionStorage.getItem(RETRY_KEY) === "1"; } catch (_) {}
+      if (!retried) {
+        try { sessionStorage.setItem(RETRY_KEY, "1"); } catch (_) {}
+        try {
+          const u = new URL(window.location.href);
+          u.searchParams.set("bootRetry", String(Date.now()));
+          window.location.replace(u.toString());
+          return;
+        } catch (_) {}
+      }
+      const v = document.getElementById("menuVersionLabel");
+      if (v && String(v.textContent || "").trim() === "v0.0.0") {
+        v.textContent = "vboot-error";
+      }
+    }, watchdogMs);
+  })();
+</script>
 </body>
 </html>
 

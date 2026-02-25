@@ -364,6 +364,7 @@ class EffectLine {
       this._dirX=0;
       this._dirY=0;
       this._stopOnArrive = options.stopOnArrive ?? false;
+      this._continueDirectionOnArrive = !!options.continueDirectionOnArrive;
       this._onPass = options.onPass ?? null;
       this._passRadius = options.passRadiusTiles ?? 0;
       this._passRepeatSec = Math.max(0, options.passRepeatSec ?? 0);
@@ -372,6 +373,8 @@ class EffectLine {
       this._enemyRangeScratch.length = 0;
       this._curveT = 0;
       this._curve = null;
+      this._lastMoveDX = 0;
+      this._lastMoveDY = 0;
 
       if (options.curve === true) {
         const dx = this.tx - this.x;
@@ -419,6 +422,14 @@ class EffectLine {
         this.dead = true;
         return;
       }
+      if (this._continueDirectionOnArrive) {
+        const dl = Math.hypot(this._lastMoveDX, this._lastMoveDY);
+        if (dl > 1e-6) {
+          this._dirX = this._lastMoveDX / dl;
+          this._dirY = this._lastMoveDY / dl;
+          return;
+        }
+      }
       const ex = game.map.exit.x + 0.5;
       const ey = game.map.exit.y + 0.5;
       const edx = ex - this.x;
@@ -428,6 +439,30 @@ class EffectLine {
       this._dirY = edy / el;
     }
 
+    applyPassEffects(game){
+      if (!this._onPass || this._passRadius <= 0) return;
+      const rr2 = this._passRadius * this._passRadius;
+      const nowSec = performance.now() / 1000;
+      const nearby = (typeof game.getEnemiesInRange === "function")
+        ? game.getEnemiesInRange(this.x, this.y, this._passRadius, this._enemyRangeScratch)
+        : game.enemies;
+      for (const e of nearby) {
+        if (e.dead || e.reachedExit) continue;
+        if (dist2(this.x, this.y, e.x, e.y) <= rr2) {
+          if (this._passRepeatSec <= 0) {
+            if (this._passHitSet.has(e)) continue;
+            this._passHitSet.add(e);
+            this._onPass(e, game, this);
+          } else {
+            const prev = this._passLastHit.get(e) ?? -Infinity;
+            if ((nowSec - prev) < this._passRepeatSec) continue;
+            this._passLastHit.set(e, nowSec);
+            this._onPass(e, game, this);
+          }
+        }
+      }
+    }
+
     update(dt, game){
       if(this.dead) return;
 
@@ -435,11 +470,15 @@ class EffectLine {
         const step = this.speed * dt;
 
         if (this._curve) {
+          const ox = this.x;
+          const oy = this.y;
           this._curveT = Math.min(1, this._curveT + step / this._curve.len);
           const t = this._curveT;
           const omt = 1 - t;
           this.x = omt*omt*this._curve.x0 + 2*omt*t*this._curve.cx + t*t*this._curve.x1;
           this.y = omt*omt*this._curve.y0 + 2*omt*t*this._curve.cy + t*t*this._curve.y1;
+          this._lastMoveDX = this.x - ox;
+          this._lastMoveDY = this.y - oy;
           if (t >= 0.999) {
             this.arrive(game);
             return;
@@ -452,37 +491,25 @@ class EffectLine {
             this.arrive(game);
             return;
           }
-          this.x += (dx / d) * step;
-          this.y += (dy / d) * step;
+          const mx = (dx / d) * step;
+          const my = (dy / d) * step;
+          this.x += mx;
+          this.y += my;
+          this._lastMoveDX = mx;
+          this._lastMoveDY = my;
         }
 
-        if (this._onPass && this._passRadius > 0) {
-          const rr2 = this._passRadius * this._passRadius;
-          const nowSec = performance.now() / 1000;
-          const nearby = (typeof game.getEnemiesInRange === "function")
-            ? game.getEnemiesInRange(this.x, this.y, this._passRadius, this._enemyRangeScratch)
-            : game.enemies;
-          for (const e of nearby) {
-            if (e.dead || e.reachedExit) continue;
-            if (dist2(this.x, this.y, e.x, e.y) <= rr2) {
-              if (this._passRepeatSec <= 0) {
-                if (this._passHitSet.has(e)) continue;
-                this._passHitSet.add(e);
-                this._onPass(e, game, this);
-              } else {
-                const prev = this._passLastHit.get(e) ?? -Infinity;
-                if ((nowSec - prev) < this._passRepeatSec) continue;
-                this._passLastHit.set(e, nowSec);
-                this._onPass(e, game, this);
-              }
-            }
-          }
-        }
+        this.applyPassEffects(game);
         return;
       }
 
-      this.x += this._dirX*this.speed*dt;
-      this.y += this._dirY*this.speed*dt;
+      const mx = this._dirX*this.speed*dt;
+      const my = this._dirY*this.speed*dt;
+      this.x += mx;
+      this.y += my;
+      this._lastMoveDX = mx;
+      this._lastMoveDY = my;
+      this.applyPassEffects(game);
       const margin=1.0;
       if(this.x < -margin || this.y < -margin || this.x > game.map.w+margin || this.y > game.map.h+margin){
         this.dead=true;

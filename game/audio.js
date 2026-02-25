@@ -191,4 +191,90 @@ const SFX = (() => {
   };
 })();
 
-export { SFX };
+const MUSIC = (() => {
+  let muted = false;
+  let volume = 0.20;
+  let source = "";
+  let audio = null;
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+  const ensureAudio = () => {
+    if (audio) return audio;
+    audio = new Audio();
+    audio.loop = true;
+    audio.preload = "auto";
+    audio.playsInline = true;
+    applyState();
+    if (source) audio.src = source;
+    return audio;
+  };
+
+  const applyState = () => {
+    if (!audio) return;
+    audio.volume = muted ? 0 : volume;
+    audio.muted = false;
+  };
+
+  const setSource = (src) => {
+    source = String(src || "").trim();
+    const a = ensureAudio();
+    if (source) {
+      try {
+        const nextSrc = new URL(source, window.location.href).toString();
+        if (a.src !== nextSrc) a.src = nextSrc;
+      } catch (_) {
+        if (a.src !== source) a.src = source;
+      }
+    }
+    return source;
+  };
+
+  const play = () => {
+    const a = ensureAudio();
+    if (!a.src && !source) return false;
+    applyState();
+    a.play().catch(() => {});
+    return true;
+  };
+
+  const pause = () => {
+    if (!audio) return;
+    audio.pause();
+  };
+
+  const setMuted = (v) => {
+    muted = !!v;
+    applyState();
+  };
+
+  const toggleMuted = () => {
+    setMuted(!muted);
+    return muted;
+  };
+
+  const isMuted = () => muted;
+
+  const setVolume = (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return volume;
+    volume = clamp(n, 0, 1);
+    applyState();
+    return volume;
+  };
+
+  const getVolume = () => volume;
+
+  return {
+    setSource,
+    play,
+    pause,
+    setMuted,
+    toggleMuted,
+    isMuted,
+    setVolume,
+    getVolume
+  };
+})();
+
+export { SFX, MUSIC };

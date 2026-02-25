@@ -1,11 +1,12 @@
 ﻿import { Game, GAME_VERSION } from "./game.js";
 import { initUI } from "./ui.js";
-import { SFX } from "./audio.js";
+import { SFX, MUSIC } from "./audio.js";
 import { GameMap } from "./map.js";
 import { CONTENT_REGISTRY } from "./content_registry.js";
 import { GAME_EVENTS } from "./events.js";
 import {
   applyCampaignClearToProgression,
+  createDefaultProgressionState,
   isCodexEntryUnlockedByProgression,
   isMapCardUnlockedByProgression,
   readProgressionState,
@@ -38,6 +39,7 @@ const RELEASE_RESET_KEY = "armtd_release_reset_0_2_33";
 const START_GOLD_REWARD_KEY = "armtd_start_gold_reward_v1";
 const START_GOLD_REWARD_BONUS = 30;
 const MENU_CODEX_DRAW_ALPHA = 0.98;
+const BOOT_RETRY_KEY = "armtd_boot_retry_v1";
 
 const canvas = document.getElementById("c");
 const bootVersionLabel = document.getElementById("menuVersionLabel");
@@ -76,6 +78,7 @@ const mapEditorState = {
 
 const bodyEl = document.body;
 const menuVersionLabel = document.getElementById("menuVersionLabel");
+const menuTotalStars = document.getElementById("menuTotalStars");
 const menuPatchNotes = document.getElementById("menuPatchNotes");
 const menuCodexPanel = document.getElementById("menuCodexPanel");
 const menuCodexDetailBack = document.getElementById("menuCodexDetailBack");
@@ -130,6 +133,9 @@ const settingsCloseBtn = document.getElementById("settingsCloseBtn");
 const settingsVolumeSlider = document.getElementById("settingsVolumeSlider");
 const settingsVolumeValue = document.getElementById("settingsVolumeValue");
 const settingsMuteBtn = document.getElementById("settingsMuteBtn");
+const settingsMusicVolumeSlider = document.getElementById("settingsMusicVolumeSlider");
+const settingsMusicVolumeValue = document.getElementById("settingsMusicVolumeValue");
+const settingsMusicMuteBtn = document.getElementById("settingsMusicMuteBtn");
 const settingsResetKeybindsBtn = document.getElementById("settingsResetKeybindsBtn");
 const settingsKeybindList = document.getElementById("settingsKeybindList");
 
@@ -189,9 +195,15 @@ if (menuVersionLabel) menuVersionLabel.textContent = `v${GAME_VERSION}`;
 renderMenuPatchNotes();
 updateContinueButton();
 syncSettingsUI();
+refreshMenuTotalStars();
 resetMapEditorBlank();
-queueMicrotask(() => {
+bindAutoSaveOnUnload();
+const bootTick = (typeof queueMicrotask === "function")
+  ? queueMicrotask
+  : (fn) => setTimeout(fn, 0);
+bootTick(() => {
   showMainMenu();
+  markBootHealthy();
 });
 
 function clamp(v, min, max){
@@ -202,6 +214,14 @@ function isTextInputTarget(target){
   if (!(target instanceof Element)) return false;
   const tag = target.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable;
+}
+
+function markBootHealthy(){
+  try {
+    window.__armtdBoot = window.__armtdBoot || {};
+    window.__armtdBoot.ok = true;
+    sessionStorage.removeItem(BOOT_RETRY_KEY);
+  } catch (_) {}
 }
 
 function applyReleaseDataResetIfNeeded(){
@@ -272,6 +292,23 @@ function writeMapProgress(data){
     safe.updatedAt = Date.now();
     localStorage.setItem(MAP_PROGRESS_KEY, JSON.stringify(safe));
   } catch (_) {}
+}
+
+function getTotalStars(progress = readMapProgress()){
+  const maps = Array.isArray(progress?.maps) ? progress.maps : [];
+  let total = 0;
+  for (const item of maps) {
+    if (item?.stars?.star1) total += 1;
+    if (item?.stars?.star2) total += 1;
+    if (item?.stars?.star3) total += 1;
+  }
+  return total;
+}
+
+function refreshMenuTotalStars(){
+  if (!menuTotalStars) return;
+  const total = getTotalStars();
+  menuTotalStars.textContent = `Stars: ${total}`;
 }
 
 function updateMapProgressMaxWave(mapCardIndex, wave){
@@ -400,6 +437,7 @@ function handleCampaignClear(payload){
   });
   writeProgressionState(progressionState);
   syncMenuCodexEntryLocks();
+  refreshMenuTotalStars();
 }
 
 function isMapUnlocked(mapIndex, progress){
@@ -823,6 +861,8 @@ function showMainMenu(){
   hideCustomMaps();
   hideMapEditorPage();
   hideMapSelect();
+  refreshMenuTotalStars();
+  updateContinueButton();
 }
 
 function hideMainMenu(){
@@ -1867,6 +1907,19 @@ function renderMenuPatchNotes(){
         "Early spawn pacing was slowed for tutorial readability: waves 1-10 now have longer spawn intervals.",
         "Additional targeted easing was added for waves 1, 2 and 3 with extra spawn-interval increases."
       ]
+    },
+    {
+      version: "0.2.76",
+      notes: [
+        "Poison prestige projectile update: it no longer disappears at arrival; it keeps traveling and keeps applying pass poison damage/stacks.",
+        "Test speed expanded to 10x (speed cycle + slider + test button).",
+        "Sniper overlevel gain math was decoupled from primary level to remove low-level overlevel advantage edge cases.",
+        "Archer Power Shot magic scaling and Poison skill AD scaling were significantly increased.",
+        "Mage selected-panel behavior updated: when prestige is unlocked, Auto Attack and Skill detail hints are hidden.",
+        "Hard Reset now also clears map stars/max-wave progress and continue save; total stars now shown on main menu.",
+        "Added boot watchdog + one-time retry for rare 0.0.0/menu-dead startup failures on web builds.",
+        "Page refresh (F5) now auto-saves active run to keep Continue usable after accidental reload."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();
@@ -2051,14 +2104,44 @@ function updateContinueButton(){
   if (menuContinueBtn) menuContinueBtn.disabled = !readRunSave();
 }
 
+function shouldAutoSaveOnUnload(){
+  if (isMainMenuOpen()) return false;
+  if (game?.gameOver) return false;
+  if (!game?.started) return false;
+  return true;
+}
+
+function persistRunSaveOnUnload(){
+  try {
+    if (!shouldAutoSaveOnUnload()) return;
+    const saveData = game.createRunSaveData();
+    writeRunSave(saveData);
+    if (!game.isCustomMapRun) {
+      updateMapProgressMaxWave(saveData.mapIndex, Math.max(saveData.resumeWave, saveData?.stats?.maxWaveSeen || 0));
+    }
+  } catch (_) {}
+}
+
+function bindAutoSaveOnUnload(){
+  window.addEventListener("beforeunload", persistRunSaveOnUnload);
+  window.addEventListener("pagehide", persistRunSaveOnUnload);
+}
+
 function applyAudioSettings(){
   const vol = Number(settings.audio?.volume);
   const safeVol = Number.isFinite(vol) ? clamp(vol, 0, 1) : 0.18;
   const muted = !!settings.audio?.muted;
+  const musicVol = Number(settings.audio?.musicVolume);
+  const safeMusicVol = Number.isFinite(musicVol) ? clamp(musicVol, 0, 1) : 0.20;
+  const musicMuted = !!settings.audio?.musicMuted;
   SFX.setVolume(safeVol);
   SFX.setMuted(muted);
+  MUSIC.setVolume(safeMusicVol);
+  MUSIC.setMuted(musicMuted);
   settings.audio.volume = safeVol;
   settings.audio.muted = muted;
+  settings.audio.musicVolume = safeMusicVol;
+  settings.audio.musicMuted = musicMuted;
 }
 
 function persistSettings(applyAudio = true){
@@ -2461,6 +2544,24 @@ function bindSettingsModal(){
     };
   }
 
+  if (settingsMusicVolumeSlider) {
+    settingsMusicVolumeSlider.addEventListener("input", () => {
+      const pct = clamp(Number(settingsMusicVolumeSlider.value), 0, 100);
+      settings.audio.musicVolume = pct / 100;
+      if (settings.audio.musicVolume > 0 && settings.audio.musicMuted) settings.audio.musicMuted = false;
+      persistSettings(true);
+      syncSettingsUI();
+    });
+  }
+
+  if (settingsMusicMuteBtn) {
+    settingsMusicMuteBtn.onclick = () => {
+      settings.audio.musicMuted = !settings.audio.musicMuted;
+      persistSettings(true);
+      syncSettingsUI();
+    };
+  }
+
   if (settingsResetKeybindsBtn) {
     settingsResetKeybindsBtn.onclick = () => {
       for (const def of KEYBIND_DEFS) settings.keybinds[def.id] = def.defaultCode;
@@ -2475,6 +2576,10 @@ function syncSettingsUI(){
   if (settingsVolumeSlider) settingsVolumeSlider.value = String(volPct);
   if (settingsVolumeValue) settingsVolumeValue.textContent = `${volPct}%`;
   if (settingsMuteBtn) settingsMuteBtn.textContent = settings.audio.muted ? "Unmute" : "Mute";
+  const musicVolPct = Math.round(clamp((settings.audio.musicVolume ?? 0) * 100, 0, 100));
+  if (settingsMusicVolumeSlider) settingsMusicVolumeSlider.value = String(musicVolPct);
+  if (settingsMusicVolumeValue) settingsMusicVolumeValue.textContent = `${musicVolPct}%`;
+  if (settingsMusicMuteBtn) settingsMusicMuteBtn.textContent = settings.audio.musicMuted ? "Music Unmute" : "Music Mute";
 }
 
 function openSettings(){
@@ -2595,12 +2700,20 @@ function bindStatsModal(){
     statsHardResetBtn.onclick = () => {
       openConfirm(
         "Hard Reset Statistics?",
-        "This will permanently clear all lifetime statistics. This cannot be undone.",
+        "This will permanently clear lifetime stats, map stars/max-wave progress, and continue save. This cannot be undone.",
         "Hard Reset",
         () => {
           if (typeof game.hardResetPersistentStats === "function") {
             game.hardResetPersistentStats();
           }
+          writeMapProgress(createDefaultMapProgress());
+          progressionState = createDefaultProgressionState();
+          writeProgressionState(progressionState);
+          clearRunSave();
+          updateContinueButton();
+          refreshMenuTotalStars();
+          renderMapSelect();
+          syncMenuCodexEntryLocks();
           openStatistics();
         }
       );

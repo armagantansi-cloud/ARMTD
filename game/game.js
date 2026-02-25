@@ -74,7 +74,7 @@ const PEEL_BUFF_INFO = {
 
 // Versioning: patch (right) for every update, minor (middle) for big updates.
 // Major (left) is increased manually.
-const GAME_VERSION = "0.2.75";
+const GAME_VERSION = "0.2.76";
 const LOG_TIPS = [
   "Tip: Discover each tower's unique skill and prestige skill.",
   "Tip: Towers can reach level 20. Sometimes even higher.",
@@ -3486,6 +3486,7 @@ class Game {
         const autoAttackText = t.def.autoAttackDesc || "—";
         const skillText = baseSkillTextRaw.replaceAll("\n","<br/>");
         const prestigeText = t.def.prestige ? `${t.def.prestige.name}: ${t.def.prestige.desc}` : "—";
+        const hideMageCombatDetail = (t.def.id === "mage" && t.level >= CFG.PRESTIGE_LEVEL);
 
         const primaryManaLine = (t.maxMana>0)
           ? `${t.mana.toFixed(0)}/${t.maxMana}`
@@ -3675,8 +3676,8 @@ class Game {
           ${t.level>=CFG.PRESTIGE_LEVEL ? `<div class="selRow"><div class="k">Prestige Mana</div><div class="v">${prestigeManaLine}</div></div>` : ``}
           ${peelBuffLine}
 
-          <div class="selHint"><b>Auto Attack</b>: ${autoAttackText}</div>
-          <div class="selHint"><b>${t.def.skillName}</b>: ${skillTextWithPreview}<span class="skillPreviewSlot">${skillPreviewSlot}</span></div>
+          ${hideMageCombatDetail ? `` : `<div class="selHint"><b>Auto Attack</b>: ${autoAttackText}</div>`}
+          ${hideMageCombatDetail ? `` : `<div class="selHint"><b>${t.def.skillName}</b>: ${skillTextWithPreview}<span class="skillPreviewSlot">${skillPreviewSlot}</span></div>`}
           ${t.level>=CFG.PRESTIGE_LEVEL ? `<div class="selHint"><b>Prestige</b>: ${prestigeText}</div>` : ``}
           ${magePrestigeBuffLine}
           ${specialSummary}

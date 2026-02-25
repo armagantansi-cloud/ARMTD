@@ -117,6 +117,7 @@ export function initUI(game, options={}){
   const cheatLegendaryBtn = document.getElementById("cheatLegendaryBtn");
   const cheatWaveInput = document.getElementById("cheatWaveInput");
   const cheatWaveGoBtn = document.getElementById("cheatWaveGoBtn");
+  const cheatSpeed10Btn = document.getElementById("cheatSpeed10Btn");
   const infoModalToggle = document.getElementById("infoModalToggle");
   const getOrderedTowerDefs = () => CONTENT_REGISTRY.towers.orderedList();
   let forceLegendary = false;
@@ -171,6 +172,12 @@ export function initUI(game, options={}){
     cheatWaveGoBtn.onclick = () => {
       const w = Math.max(1, parseInt(cheatWaveInput.value || "1", 10) || 1);
       game.jumpToWaveForTest(w);
+      game.refreshUI(true);
+    };
+  }
+  if (cheatSpeed10Btn) {
+    cheatSpeed10Btn.onclick = () => {
+      setSpeed(10);
       game.refreshUI(true);
     };
   }
@@ -244,11 +251,12 @@ export function initUI(game, options={}){
   const speedSlider=document.getElementById("speedSlider");
   const speedLabel=document.getElementById("speedLabel");
   const speedCycleBtn=document.getElementById("speedCycleBtn");
-  const SPEED_CYCLE_VALUES = [1, 2, 3];
+  const MAX_GAME_SPEED = 10;
+  const SPEED_CYCLE_VALUES = [1, 2, 3, 10];
   let lastNonZeroSpeed = 1.0;
   function setSpeed(v){
     if(modalOpen) return;
-    const next = Math.min(3, Math.max(0, Number(v) || 0));
+    const next = Math.min(MAX_GAME_SPEED, Math.max(0, Number(v) || 0));
     game.gameSpeed=next;
     if (next > 0) lastNonZeroSpeed = next;
     speedSlider.value = next.toFixed(1);
@@ -260,9 +268,15 @@ export function initUI(game, options={}){
       if (modalOpen) return;
       const current = Math.max(0, Number(game.gameSpeed) || 0);
       let next = SPEED_CYCLE_VALUES[0];
-      if (current >= SPEED_CYCLE_VALUES[2] - 0.001) next = SPEED_CYCLE_VALUES[0];
-      else if (current >= SPEED_CYCLE_VALUES[1] - 0.001) next = SPEED_CYCLE_VALUES[2];
-      else if (current >= SPEED_CYCLE_VALUES[0] - 0.001) next = SPEED_CYCLE_VALUES[1];
+      let found = false;
+      for (const speed of SPEED_CYCLE_VALUES) {
+        if (current < speed - 0.001) {
+          next = speed;
+          found = true;
+          break;
+        }
+      }
+      if (!found) next = SPEED_CYCLE_VALUES[0];
       setSpeed(next);
     });
   }

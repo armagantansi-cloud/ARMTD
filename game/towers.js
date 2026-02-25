@@ -76,8 +76,11 @@ const MILESTONES = new Set([5,10,15,20]);
   function archerPowerShotBonus(tLike){
     const lvl = tLike?.level ?? 1;
     const magic = magicPower(tLike);
-    return 1.35 + (lvl-1)*0.032 + magic*0.028;
+    // Stronger magic-scaling identity for Archer skill.
+    return 1.45 + (lvl-1)*0.038 + magic*0.085;
   }
+
+  const POISON_SKILL_AD_DOT_SCALE = 0.080;
 
   function breakerAutoShred(tLike){
     const lvl = tLike?.level ?? 1;
@@ -265,6 +268,13 @@ function gainCurve(levelBefore) {
     if (levelBefore === 19) g *= 1.35;
     if (levelBefore === 20) g *= 1.75;
     return g;
+  }
+
+  function sniperSecondaryScaledGain(secondaryLevel){
+    // Overlevel should be based on overlevel progression itself, not current primary level.
+    const sec = Math.max(0, Math.floor(Number(secondaryLevel) || 0));
+    const refLevel = clamp(5 + Math.floor(sec / 12), 5, CFG.TOWER_MAX_LEVEL);
+    return scaledGain(refLevel) / 5;
   }
 
   function applyUpgradeGain(tower, g){
@@ -489,14 +499,14 @@ const TOWER_DEFS = [
         const dmgMul = (tLike?.perks?.dmgMul || 1);
         const avgAd = (((tLike?.AD?.[0] ?? 0) + (tLike?.AD?.[1] ?? 0)) / 2) * (tLike?.perks?.adMul ?? 1);
         const basePerTick = (2.0 + (lvl-1)*0.18) * dmgMul;
-        const totalPerTick = basePerTick + (avgAd * 0.035);
+        const totalPerTick = basePerTick + (avgAd * POISON_SKILL_AD_DOT_SCALE);
 
         return `Toxic Surge: +${stacksBonus} instant stacks and DOT x${perTickBoost.toFixed(2)}. Current DOT/stack: ${totalPerTick.toFixed(1)} (AD included).`;
       },
       projectile: { speedTilesPerSec: 7.6 },
 
       prestige: { mana: 800, name: "Plague Bomb",
-        desc: "Giant poison bomb keeps damaging and stacking poison while traveling, then erupts at impact."
+        desc: "Giant poison bomb keeps damaging and stacking poison while traveling, erupts at impact, then keeps flying."
       }
     },
     {
@@ -715,7 +725,7 @@ class Tower {
 
     applySecondaryLevelGain(){
       this.secondaryLevel += 1;
-      const g = scaledGain(this.level) / 5;
+      const g = sniperSecondaryScaledGain(this.secondaryLevel);
       applyUpgradeGain(this, g);
     }
 
@@ -1224,7 +1234,7 @@ class Tower {
         ));
       };
 
-      // yavaş ve görünür projectile (patladığı yerde kaybolur)
+      // yavaş ve görünür projectile (patlama sonrası da yönünde ilerlemeye devam eder)
       const proj = acquireFreeProjectile(
         this.x, this.y,
         ax, ay,
@@ -1232,7 +1242,8 @@ class Tower {
         { color:"rgba(34,197,94,0.90)", radius:CFG.POISON_PRESTIGE_PASS_RADIUS_TILES },
         () => spawnRing(),
         {
-          stopOnArrive: true,
+          stopOnArrive: false,
+          continueDirectionOnArrive: true,
           passRadiusTiles: CFG.POISON_PRESTIGE_PASS_RADIUS_TILES * 1.45,
           onPass: (enemy) => applyToxicSurge(enemy),
           passRepeatSec: 0.07
@@ -1359,7 +1370,7 @@ class Tower {
             // Poison: kalıcı stack
             if (this.def.id === "poison") {
               const avgAd = ((this.AD[0] + this.AD[1]) / 2) * this.perks.adMul * this.peelMul("ad");
-              const baseTick = ((2.0 + (this.level-1)*0.18) * this.perks.dmgMul) + (avgAd * 0.035);
+              const baseTick = ((2.0 + (this.level-1)*0.18) * this.perks.dmgMul) + (avgAd * POISON_SKILL_AD_DOT_SCALE);
               let stacksAdd = 1;
 
               if (skillResLocal?.kind === "toxic") {

@@ -32,7 +32,9 @@ const DEFAULT_SETTINGS = {
   keybinds: { ...DEFAULT_KEYBINDS },
   audio: {
     muted: false,
-    volume: 0.18
+    volume: 0.18,
+    musicMuted: false,
+    musicVolume: 0.20
   }
 };
 
@@ -58,9 +60,13 @@ function normalizeKeybinds(input){
 
 function normalizeAudio(input){
   const raw = input && typeof input === "object" ? input : {};
+  const vol = clamp(Number(raw.volume), 0, 1);
+  const musicVol = clamp(Number(raw.musicVolume), 0, 1);
   return {
     muted: !!raw.muted,
-    volume: clamp(Number(raw.volume), 0, 1)
+    volume: Number.isFinite(vol) ? vol : DEFAULT_SETTINGS.audio.volume,
+    musicMuted: !!raw.musicMuted,
+    musicVolume: Number.isFinite(musicVol) ? musicVol : DEFAULT_SETTINGS.audio.musicVolume
   };
 }
 
@@ -70,9 +76,6 @@ function normalizeSettings(input){
     keybinds: normalizeKeybinds(raw.keybinds),
     audio: normalizeAudio(raw.audio)
   };
-  if (!Number.isFinite(normalized.audio.volume)) {
-    normalized.audio.volume = DEFAULT_SETTINGS.audio.volume;
-  }
   return normalized;
 }
 
