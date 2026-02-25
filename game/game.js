@@ -74,7 +74,7 @@ const PEEL_BUFF_INFO = {
 
 // Versioning: patch (right) for every update, minor (middle) for big updates.
 // Major (left) is increased manually.
-const GAME_VERSION = "0.2.76";
+const GAME_VERSION = "0.2.77";
 const LOG_TIPS = [
   "Tip: Discover each tower's unique skill and prestige skill.",
   "Tip: Towers can reach level 20. Sometimes even higher.",
@@ -3487,6 +3487,7 @@ class Game {
         const skillText = baseSkillTextRaw.replaceAll("\n","<br/>");
         const prestigeText = t.def.prestige ? `${t.def.prestige.name}: ${t.def.prestige.desc}` : "—";
         const hideMageCombatDetail = (t.def.id === "mage" && t.level >= CFG.PRESTIGE_LEVEL);
+        const skillHintClass = (t.def.id === "archer") ? "selHint selHintPowerShot" : "selHint";
 
         const primaryManaLine = (t.maxMana>0)
           ? `${t.mana.toFixed(0)}/${t.maxMana}`
@@ -3677,7 +3678,7 @@ class Game {
           ${peelBuffLine}
 
           ${hideMageCombatDetail ? `` : `<div class="selHint"><b>Auto Attack</b>: ${autoAttackText}</div>`}
-          ${hideMageCombatDetail ? `` : `<div class="selHint"><b>${t.def.skillName}</b>: ${skillTextWithPreview}<span class="skillPreviewSlot">${skillPreviewSlot}</span></div>`}
+          ${hideMageCombatDetail ? `` : `<div class="${skillHintClass}"><b>${t.def.skillName}</b>: ${skillTextWithPreview}<span class="skillPreviewSlot">${skillPreviewSlot}</span></div>`}
           ${t.level>=CFG.PRESTIGE_LEVEL ? `<div class="selHint"><b>Prestige</b>: ${prestigeText}</div>` : ``}
           ${magePrestigeBuffLine}
           ${specialSummary}
@@ -3703,6 +3704,7 @@ class Game {
         const b=d.base;
         const autoAttackText = d.autoAttackDesc || "—";
         const desc=(d.skillDesc ? d.skillDesc({level:1, magicBonus:d.base.MD, perks:{magMul:1, dmgMul:1}}) : "—").replaceAll("\n","<br/>");
+        const shopSkillHintClass = (d.id === "archer") ? "selHint selHintPowerShot" : "selHint";
         const manaLine = (d.skillManaCost>0) ? `${d.skillManaCost}` : (d.id==="sniper" ? "Carepackage" : "—");
         const isPeel = d.id === "peel";
         const baseBounce = isPeel ? peelBounceCountFromAD(b.AD, 1) : 0;
@@ -3727,7 +3729,7 @@ class Game {
           <div class="selRow"><div class="k">ArP</div><div class="v">${(b.ArP*100).toFixed(0)}%</div></div>
           <div class="selRow"><div class="k">MaP</div><div class="v">${b.MaP}</div></div>
           <div class="selHint"><b>Auto Attack</b>: ${autoAttackText}</div>
-          <div class="selHint"><b>${d.skillName}</b>: ${desc}</div>
+          <div class="${shopSkillHintClass}"><b>${d.skillName}</b>: ${desc}</div>
         `;
         upBtn.disabled=true; upBtn.textContent="Upgrade (Z)"; upBtn.title="";
         resetFastBtn();

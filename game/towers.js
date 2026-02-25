@@ -271,10 +271,9 @@ function gainCurve(levelBefore) {
   }
 
   function sniperSecondaryScaledGain(secondaryLevel){
-    // Overlevel should be based on overlevel progression itself, not current primary level.
     const sec = Math.max(0, Math.floor(Number(secondaryLevel) || 0));
-    const refLevel = clamp(5 + Math.floor(sec / 12), 5, CFG.TOWER_MAX_LEVEL);
-    return scaledGain(refLevel) / 5;
+    if (sec <= 0) return 0;
+    return 0.01;
   }
 
   function applyUpgradeGain(tower, g){
@@ -313,7 +312,7 @@ const TOWER_DEFS = [
     {
       id: "peel",
       name: "Peel Tower",
-      cost: 9000,
+      cost: 12500,
       size: 2,
       autoAttackDesc: "Fires support bolts that grant a random short buff to a nearby tower.",
       skillName: "Core Uplink",
@@ -726,7 +725,12 @@ class Tower {
     applySecondaryLevelGain(){
       this.secondaryLevel += 1;
       const g = sniperSecondaryScaledGain(this.secondaryLevel);
-      applyUpgradeGain(this, g);
+      if (g <= 0) return;
+      const mul = 1 + g;
+      const low = Math.max(1, Math.round(this.AD[0] * mul));
+      const high = Math.max(low, Math.round(this.AD[1] * mul));
+      this.AD = [low, high];
+      this.magicBonus = Math.max(0, Math.round(this.magicBonus * mul));
     }
 
     usesTimedPrestige(){
@@ -967,18 +971,42 @@ class Tower {
       const color = colorMap[buffType] || "rgba(14,165,233,0.95)";
       const shape = shapeMap[buffType] || "circle";
       const totalHops = bounce;
-      const enableSelfFallback = totalHops >= 21;
+      const launchFinalReturn = (fromTower) => {
+        if (!fromTower || fromTower === this) return;
+        if (!game.towers.includes(fromTower) || !game.towers.includes(this)) return;
+        const backProj = acquireFreeProjectile(
+          fromTower.x, fromTower.y,
+          this.x, this.y,
+          this.getProjectileSpeed(),
+          { color, radius: 0.11, shape },
+          () => {
+            if (!game.towers.includes(this)) return;
+            this.applyPeelBuff(buffType, power, duration, fromTower);
+          },
+          {
+            stopOnArrive: true,
+            curve: true,
+            curveArcMul: 0.60,
+            curveArcMaxTiles: 2.60,
+            curveSign: 1
+          }
+        );
+        game.projectiles.push(backProj);
+      };
       const launchHop = (fromTower, hopIdx) => {
-        if (hopIdx > totalHops) return;
         if (!game.towers.includes(fromTower)) return;
+        if (hopIdx > totalHops) {
+          launchFinalReturn(fromTower);
+          return;
+        }
 
         const segments = launchHop._segments || (launchHop._segments = []);
         const isFirst = hopIdx === 1;
         let target = this.pickNearestPeelTarget(game, fromTower, { firstHop: isFirst, hitSet, segments });
-        if (!target && enableSelfFallback && !hitSet.has(this)) {
-          target = this;
+        if (!target) {
+          launchFinalReturn(fromTower);
+          return;
         }
-        if (!target) return;
 
         const proj = acquireFreeProjectile(
           fromTower.x, fromTower.y,
@@ -986,10 +1014,17 @@ class Tower {
           this.getProjectileSpeed(),
           { color, radius: 0.11, shape },
           () => {
-            if (!game.towers.includes(target)) return;
+            if (!game.towers.includes(target)) {
+              launchFinalReturn(fromTower);
+              return;
+            }
             target.applyPeelBuff(buffType, power, duration, fromTower);
             hitSet.add(target);
             segments.push({ a: { x: fromTower.x, y: fromTower.y }, b: { x: target.x, y: target.y } });
+            if (hopIdx >= totalHops) {
+              launchFinalReturn(target);
+              return;
+            }
             launchHop(target, hopIdx + 1);
           },
           {

@@ -308,7 +308,7 @@ function getTotalStars(progress = readMapProgress()){
 function refreshMenuTotalStars(){
   if (!menuTotalStars) return;
   const total = getTotalStars();
-  menuTotalStars.textContent = `Stars: ${total}`;
+  menuTotalStars.textContent = `Total Stars: ${total}`;
 }
 
 function updateMapProgressMaxWave(mapCardIndex, wave){
@@ -1919,6 +1919,16 @@ function renderMenuPatchNotes(){
         "Hard Reset now also clears map stars/max-wave progress and continue save; total stars now shown on main menu.",
         "Added boot watchdog + one-time retry for rare 0.0.0/menu-dead startup failures on web builds.",
         "Page refresh (F5) now auto-saves active run to keep Continue usable after accidental reload."
+      ]
+    },
+    {
+      version: "0.2.77",
+      notes: [
+        "Public speed controls are now capped at 3x again; 10x is test-only via the cheat panel.",
+        "Sniper secondary level rule simplified: each secondary level now grants flat +1% power (mana-related behavior unchanged).",
+        "Peel Tower tuning update: cost increased to 12,500, and support projectile chains now always return to Peel as a final hop without consuming bounce count.",
+        "Wave-based poison suppression was removed: poison resist/decay scaling is now disabled to prevent unintended late-wave poison stack drop.",
+        "Archer Power Shot detail text is now blue with a larger font, and the main-menu total stars badge received a visual polish."
       ]
     }
   ];

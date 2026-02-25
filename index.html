@@ -90,7 +90,7 @@
   </div>
   <div class="mainMenuInner">
     <div class="mainMenuTop">
-      <div id="menuTotalStars" class="mainMenuStars mono">Stars: 0</div>
+      <div id="menuTotalStars" class="mainMenuStars mono">Total Stars: 0</div>
       <h1 class="mainMenuTitle">ARMTD</h1>
     </div>
 
@@ -287,7 +287,7 @@
             <button id="speedCycleBtn" type="button" class="pill">Speed: <span id="speedLabel">1.0x</span></button>
             <div class="hint">0x = paused</div>
           </div>
-          <input id="speedSlider" type="range" min="0" max="10" step="0.1" value="1" />
+          <input id="speedSlider" type="range" min="0" max="3" step="0.1" value="1" />
         </div>
       </div>
     </div>
@@ -418,7 +418,7 @@
   window.__armtdBoot = window.__armtdBoot || { ok: false, startedAt: Date.now() };
 </script>
 <!-- Entry point (Live Server: open this index.html) -->
-<script type="module" src="game/main.js?v=0.2.76"></script>
+<script type="module" src="game/main.js?v=0.2.77"></script>
 <script>
   (() => {
     const RETRY_KEY = "armtd_boot_retry_v1";

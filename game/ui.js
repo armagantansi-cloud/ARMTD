@@ -177,7 +177,7 @@ export function initUI(game, options={}){
   }
   if (cheatSpeed10Btn) {
     cheatSpeed10Btn.onclick = () => {
-      setSpeed(10);
+      setSpeed(10, { allowCheat: true });
       game.refreshUI(true);
     };
   }
@@ -251,15 +251,20 @@ export function initUI(game, options={}){
   const speedSlider=document.getElementById("speedSlider");
   const speedLabel=document.getElementById("speedLabel");
   const speedCycleBtn=document.getElementById("speedCycleBtn");
-  const MAX_GAME_SPEED = 10;
-  const SPEED_CYCLE_VALUES = [1, 2, 3, 10];
+  const MAX_PUBLIC_GAME_SPEED = 3;
+  const MAX_CHEAT_GAME_SPEED = 10;
+  const SPEED_CYCLE_VALUES = [1, 2, 3];
   let lastNonZeroSpeed = 1.0;
-  function setSpeed(v){
+  function setSpeed(v, options = {}){
     if(modalOpen) return;
-    const next = Math.min(MAX_GAME_SPEED, Math.max(0, Number(v) || 0));
+    const raw = Number(v) || 0;
+    const allowCheat = !!options.allowCheat
+      || ((raw > MAX_PUBLIC_GAME_SPEED) && (game.gameSpeed > MAX_PUBLIC_GAME_SPEED || lastNonZeroSpeed > MAX_PUBLIC_GAME_SPEED));
+    const cap = allowCheat ? MAX_CHEAT_GAME_SPEED : MAX_PUBLIC_GAME_SPEED;
+    const next = Math.min(cap, Math.max(0, raw));
     game.gameSpeed=next;
     if (next > 0) lastNonZeroSpeed = next;
-    speedSlider.value = next.toFixed(1);
+    speedSlider.value = Math.min(MAX_PUBLIC_GAME_SPEED, next).toFixed(1);
     speedLabel.textContent=`${next.toFixed(1)}x`;
   }
   speedSlider.addEventListener("input", ()=>setSpeed(parseFloat(speedSlider.value)));
@@ -400,8 +405,8 @@ export function initUI(game, options={}){
         setSpeed(0);
       } else {
         const resumeSpeed = Math.max(0.1, lastNonZeroSpeed || 1.0);
-        speedSlider.value = String(resumeSpeed);
-        setSpeed(resumeSpeed);
+        speedSlider.value = String(Math.min(MAX_PUBLIC_GAME_SPEED, resumeSpeed));
+        setSpeed(resumeSpeed, { allowCheat: resumeSpeed > MAX_PUBLIC_GAME_SPEED });
       }
       return;
     }
