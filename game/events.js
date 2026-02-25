@@ -5,6 +5,7 @@ const GAME_EVENTS = Object.freeze({
   GAME_OVER_MAIN_MENU: "game_over_main_menu",
   WAVE_STARTED: "wave_started",
   WAVE_ENDED: "wave_ended",
+  CORE_DAMAGED: "core_damaged",
   TOWER_BUILT: "tower_built",
   TOWER_LEVEL_UP: "tower_level_up",
   TOWER_PRESTIGE_UNLOCKED: "tower_prestige_unlocked",

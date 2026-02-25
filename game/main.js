@@ -435,13 +435,18 @@ function bindGameplayEvents(){
   game.onEvent(GAME_EVENTS.WAVE_STARTED, (payload) => {
     const waveNum = Math.max(1, Math.floor(Number(payload?.waveNum) || 1));
     const composition = Array.isArray(payload?.composition) ? payload.composition : [];
-    const isBossWave = composition.some(part => String(part?.type || "") === "boss");
+    const isBossWave = !!payload?.isBossWave
+      || composition.some(part => String(part?.type || "") === "boss")
+      || ((waveNum % 10) === 0);
     MUSIC.onWaveStart({ waveNum, isBossWave });
   });
   game.onEvent(GAME_EVENTS.WAVE_ENDED, (payload) => {
     const waveNum = Math.max(1, Math.floor(Number(payload?.waveNum) || 1));
-    const isBossWave = (waveNum % 10) === 0;
+    const isBossWave = !!payload?.isBossWave || ((waveNum % 10) === 0);
     MUSIC.onWaveEnd({ waveNum, isBossWave });
+  });
+  game.onEvent(GAME_EVENTS.CORE_DAMAGED, (payload) => {
+    MUSIC.onCoreDamaged(payload || {});
   });
 }
 
@@ -1982,6 +1987,15 @@ function renderMenuPatchNotes(){
         "Settings audio labels/layout updated: Master Volume renamed to Effects Volume, and each volume row now has its own inline mute button.",
         "Adaptive music architecture refactored into a dedicated module with dynamic menu/game tempo scaling, wave-driven intensity rise and arpeggio transition phrases.",
         "Boss music reaction added: bass drops one octave on boss phases and remains in low register for at least 5 seconds even if boss dies quickly."
+      ]
+    },
+    {
+      version: "0.2.81",
+      notes: [
+        "Peel Tower price tuned down to 11,000 and Peel AD buff now properly contributes to bounce count scaling.",
+        "Adaptive music v2: added a centralized tuning block (tempo curve, arpeggio frequency, boss bass hold) for easier live balancing.",
+        "Music loop was expanded with a longer C-minor-centered chord form (Cm, Bb, Ab, Eb, Gm), richer evolving sections and a late-wave drive layer.",
+        "Core damage now triggers a temporary key shift, and boss detection now reliably enforces low-octave bass drop behavior."
       ]
     }
   ];

@@ -311,6 +311,10 @@ const MUSIC = (() => {
     adaptive.onWaveEnd(payload || {});
   };
 
+  const onCoreDamaged = (payload) => {
+    adaptive.onCoreDamaged(payload || {});
+  };
+
   return {
     setSource,
     play,
@@ -325,7 +329,8 @@ const MUSIC = (() => {
     onRunRestarted,
     onGameOver,
     onWaveStart,
-    onWaveEnd
+    onWaveEnd,
+    onCoreDamaged
   };
 })();
 

@@ -1,29 +1,72 @@
 function createAdaptiveMusicEngine(){
+  const TUNING = Object.freeze({
+    tempo: Object.freeze({
+      menuBaseMul: 0.62,
+      gameBaseMul: 0.84,
+      gameLinearMul: 0.66,
+      gameCurveMul: 1.18,
+      gameMaxMul: 2.45,
+      waveNormDenom: 120,
+      endgameStartWave: 80,
+      endgameExtraMax: 0.26,
+      bossTempoBonus: 0.12
+    }),
+    arrangement: Object.freeze({
+      baseSectionSec: 9.6,
+      minSectionSec: 2.8,
+      maxSectionSec: 12.0,
+      lookAheadSec: 1.25,
+      schedulerMs: 100,
+      chordSequence: Object.freeze([0, 1, 2, 3, 4, 2, 3, 1, 4, 0]),
+      menuArpChance: 0.35,
+      earlyArpChance: 0.30,
+      midArpChance: 0.48,
+      lateArpChance: 0.66,
+      driveLayerStartWave: 70
+    }),
+    boss: Object.freeze({
+      bassDropSemitones: 12,
+      bassMinHoldSec: 5.0
+    }),
+    damageShift: Object.freeze({
+      semitones: 2,
+      holdSec: 6.0
+    }),
+    levels: Object.freeze({
+      padPeak: 0.078,
+      bassPeak: 0.104,
+      pulsePeak: 0.066,
+      arpPeak: 0.034,
+      leadPeak: 0.030,
+      drivePeak: 0.025
+    })
+  });
+
+  const CHORDS = [
+    { name: "Cm", root: 48, notes: [48, 51, 55, 60] },
+    { name: "Bb", root: 46, notes: [46, 50, 53, 58] },
+    { name: "Ab", root: 44, notes: [44, 48, 51, 56] },
+    { name: "Eb", root: 51, notes: [51, 55, 58, 63] },
+    { name: "Gm", root: 43, notes: [43, 46, 50, 55] }
+  ];
+
+  const NAT_MINOR_OFFSETS = [0, 2, 3, 5, 7, 8, 10];
+
   let ctx = null;
   let master = null;
   let muted = false;
   let volume = 0.20;
   let scene = "menu";
-  let currentWave = 0;
+  let currentWave = 1;
   let bossWaveActive = false;
   let bossBassUntil = 0;
   let pendingBossBoostSec = 0;
+  let keyShiftUntil = 0;
+  let pendingKeyShiftSec = 0;
   let scheduler = null;
   let nextSectionTime = 0;
-  let chordCursor = 0;
-  let phraseCursor = 0;
+  let sectionCursor = 0;
   const activeVoices = new Set();
-
-  const SECTION_BASE_SEC = 7.6;
-  const LOOKAHEAD_SEC = 0.9;
-  const SCHEDULER_MS = 120;
-  const NAT_MINOR_OFFSETS = [0, 2, 3, 5, 7, 8, 10];
-  const CHORDS = [
-    { name: "Cm", notes: [48, 51, 55, 60], root: 48 },
-    { name: "EbMaj7", notes: [51, 55, 58, 62], root: 51 },
-    { name: "AbMaj9", notes: [44, 48, 51, 58], root: 44 },
-    { name: "Bb7sus4", notes: [46, 51, 53, 56], root: 46 }
-  ];
 
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
   const midiToHz = (midi) => 440 * Math.pow(2, (midi - 69) / 12);
@@ -73,32 +116,30 @@ function createAdaptiveMusicEngine(){
     const c = ensureCtx();
     if (!c || !master) return;
     const start = Math.max(c.currentTime, opts.startTime);
-    const end = Math.max(start + 0.08, opts.endTime);
+    const end = Math.max(start + 0.06, opts.endTime);
+
     const osc = c.createOscillator();
     const filter = c.createBiquadFilter();
     const gain = c.createGain();
 
     osc.type = opts.type || "sawtooth";
     osc.frequency.setValueAtTime(Math.max(18, opts.freq), start);
-    if (Number.isFinite(opts.detune)) {
-      osc.detune.setValueAtTime(opts.detune, start);
-    }
+    if (Number.isFinite(opts.detune)) osc.detune.setValueAtTime(opts.detune, start);
     if (Number.isFinite(opts.freqEnd) && opts.freqEnd > 0) {
       osc.frequency.exponentialRampToValueAtTime(Math.max(18, opts.freqEnd), end);
     }
 
     filter.type = opts.filterType || "lowpass";
-    filter.Q.value = Number.isFinite(opts.filterQ) ? opts.filterQ : 0.72;
-    const f0 = Math.max(40, Number(opts.filterStart) || 900);
-    filter.frequency.setValueAtTime(f0, start);
+    filter.Q.value = Number.isFinite(opts.filterQ) ? opts.filterQ : 0.68;
+    filter.frequency.setValueAtTime(Math.max(40, Number(opts.filterStart) || 900), start);
     if (Number.isFinite(opts.filterEnd)) {
       filter.frequency.linearRampToValueAtTime(Math.max(40, opts.filterEnd), end);
     }
 
-    const peak = Math.max(0.0008, Number(opts.peak) || 0.06);
+    const peak = Math.max(0.0008, Number(opts.peak) || 0.04);
     const attack = Math.max(0.01, Number(opts.attack) || 0.08);
     const hold = Math.max(0, Number(opts.hold) || 0);
-    const release = Math.max(0.05, Number(opts.release) || 0.35);
+    const release = Math.max(0.05, Number(opts.release) || 0.25);
     const attackEnd = Math.min(end, start + attack);
     const holdEnd = Math.min(end, attackEnd + hold);
     const releaseStart = Math.min(end, Math.max(holdEnd, end - release));
@@ -106,7 +147,7 @@ function createAdaptiveMusicEngine(){
     gain.gain.setValueAtTime(0.0001, start);
     gain.gain.exponentialRampToValueAtTime(peak, attackEnd);
     gain.gain.setValueAtTime(peak, holdEnd);
-    gain.gain.linearRampToValueAtTime(peak * 0.78, releaseStart);
+    gain.gain.linearRampToValueAtTime(peak * 0.82, releaseStart);
     gain.gain.exponentialRampToValueAtTime(0.0001, end);
 
     osc.connect(filter);
@@ -119,142 +160,200 @@ function createAdaptiveMusicEngine(){
   };
 
   const computeTempoMul = (timeSec) => {
-    if (scene === "menu") return 0.72;
-    const waveNorm = clamp((currentWave - 1) / 120, 0, 1);
-    let mul = 0.86 + waveNorm * 0.82;
-    if (bossWaveActive || timeSec < bossBassUntil) mul += 0.09;
-    return clamp(mul, 0.68, 1.90);
+    if (scene !== "game") return TUNING.tempo.menuBaseMul;
+    const wNorm = clamp((currentWave - 1) / TUNING.tempo.waveNormDenom, 0, 1);
+    let mul = TUNING.tempo.gameBaseMul
+      + (TUNING.tempo.gameLinearMul * wNorm)
+      + (TUNING.tempo.gameCurveMul * wNorm * wNorm);
+    if (currentWave >= TUNING.tempo.endgameStartWave) {
+      const endNorm = clamp((currentWave - TUNING.tempo.endgameStartWave) / 50, 0, 1);
+      mul += TUNING.tempo.endgameExtraMax * endNorm * endNorm;
+    }
+    if (bossWaveActive || timeSec < bossBassUntil) mul += TUNING.tempo.bossTempoBonus;
+    return clamp(mul, TUNING.tempo.menuBaseMul, TUNING.tempo.gameMaxMul);
   };
 
   const shouldUseArp = () => {
-    if (scene === "menu") return (phraseCursor % 5) === 2;
-    if (currentWave < 8) return (phraseCursor % 7) === 3;
-    if (currentWave < 24) return (phraseCursor % 4) === 1;
-    return (phraseCursor % 3) !== 0;
+    const wave = Math.max(1, currentWave);
+    let chance = TUNING.arrangement.menuArpChance;
+    if (scene === "game") {
+      chance = wave < 12
+        ? TUNING.arrangement.earlyArpChance
+        : (wave < 45 ? TUNING.arrangement.midArpChance : TUNING.arrangement.lateArpChance);
+    }
+    const seeded = Math.abs(Math.sin((sectionCursor + 1) * 23.917));
+    return seeded < chance;
   };
 
-  const schedulePad = (noteMidi, startTime, chordSec) => {
-    const freq = midiToHz(noteMidi);
+  const shouldUseDriveLayer = () => {
+    if (scene !== "game") return false;
+    if (currentWave >= TUNING.arrangement.driveLayerStartWave) return true;
+    return bossWaveActive;
+  };
+
+  const getActiveShift = (timeSec) => {
+    return (timeSec < keyShiftUntil) ? TUNING.damageShift.semitones : 0;
+  };
+
+  const shiftChord = (chord, semitones = 0) => {
+    if (!semitones) return chord;
+    return {
+      ...chord,
+      root: chord.root + semitones,
+      notes: chord.notes.map(n => n + semitones)
+    };
+  };
+
+  const schedulePad = (midi, start, lenSec) => {
+    const f = midiToHz(midi);
     spawnVoice({
       type: "sawtooth",
-      freq,
-      detune: -2.8,
-      startTime,
-      endTime: startTime + chordSec * 0.95,
-      peak: 0.08,
-      attack: 1.6,
-      release: 1.2,
-      filterStart: 780,
-      filterEnd: 1120
+      freq: f,
+      detune: -2.7,
+      startTime: start,
+      endTime: start + lenSec * 0.92,
+      peak: TUNING.levels.padPeak,
+      attack: 1.4,
+      release: 1.05,
+      filterStart: 760,
+      filterEnd: 1180,
+      filterQ: 0.72
     });
     spawnVoice({
       type: "triangle",
-      freq: freq * 1.997,
-      detune: 2.1,
-      startTime: startTime + 0.06,
-      endTime: startTime + chordSec * 0.78,
-      peak: 0.034,
-      attack: 0.92,
-      release: 0.9,
-      filterStart: 1040,
-      filterEnd: 1560
+      freq: f * 1.997,
+      detune: 2.0,
+      startTime: start + 0.08,
+      endTime: start + lenSec * 0.76,
+      peak: TUNING.levels.padPeak * 0.44,
+      attack: 0.9,
+      release: 0.8,
+      filterStart: 1120,
+      filterEnd: 1640,
+      filterQ: 0.54
     });
   };
 
-  const scheduleBass = (noteMidi, startTime, chordSec, bossDrop) => {
-    const drop = bossDrop ? 12 : 0;
-    const root = noteMidi - drop;
-    const rootFreq = midiToHz(root);
-    const peak = bossDrop ? 0.14 : 0.095;
+  const scheduleBass = (rootMidi, start, lenSec, bossDrop) => {
+    const drop = bossDrop ? TUNING.boss.bassDropSemitones : 0;
+    const midi = rootMidi - drop;
+    const f = midiToHz(midi);
+    const peak = bossDrop ? TUNING.levels.bassPeak * 1.34 : TUNING.levels.bassPeak;
     spawnVoice({
       type: "sine",
-      freq: rootFreq,
-      freqEnd: rootFreq * 0.97,
-      startTime,
-      endTime: startTime + chordSec * 0.82,
+      freq: f,
+      freqEnd: f * 0.97,
+      startTime: start,
+      endTime: start + lenSec * 0.84,
       peak,
-      attack: 0.14,
-      release: 0.72,
-      filterStart: 320,
-      filterEnd: 210,
-      filterQ: 0.45
-    });
-    spawnVoice({
-      type: "triangle",
-      freq: rootFreq * 0.998,
-      startTime: startTime + chordSec * 0.48,
-      endTime: startTime + chordSec * 0.92,
-      peak: peak * 0.70,
       attack: 0.12,
-      release: 0.44,
-      filterStart: 280,
-      filterEnd: 180,
-      filterQ: 0.35
+      release: 0.62,
+      filterStart: 320,
+      filterEnd: 190,
+      filterQ: 0.46
     });
-  };
-
-  const schedulePulse = (noteMidi, startTime, tempoMul) => {
-    const freq = midiToHz(noteMidi);
     spawnVoice({
       type: "triangle",
-      freq,
-      freqEnd: Math.max(20, freq * 0.93),
-      startTime,
-      endTime: startTime + clamp(0.34 / Math.max(0.7, tempoMul), 0.15, 0.42),
-      peak: 0.064,
-      attack: 0.05,
-      release: 0.20,
-      filterStart: 620,
-      filterEnd: 390,
-      filterQ: 0.42
+      freq: f * 0.997,
+      startTime: start + lenSec * 0.46,
+      endTime: start + lenSec * 0.94,
+      peak: peak * 0.64,
+      attack: 0.10,
+      release: 0.42,
+      filterStart: 260,
+      filterEnd: 170,
+      filterQ: 0.34
     });
   };
 
-  const scheduleArp = (chord, startTime, chordSec, tempoMul) => {
-    const pattern = [0, 1, 2, 3, 2, 1, 0, 2, 1, 3];
-    const stepSec = clamp(0.36 / Math.max(0.7, tempoMul), 0.15, 0.40);
-    const horizon = startTime + chordSec * 0.72;
-    for (let i = 0; i < pattern.length; i += 1) {
-      const t = startTime + i * stepSec;
-      if (t >= horizon) break;
-      const noteIdx = pattern[i] % chord.notes.length;
-      const octave = (i % 4 === 3) ? 12 : ((i % 4 === 0) ? 0 : 24);
-      const midi = chord.notes[noteIdx] + octave;
-      const freq = midiToHz(midi);
+  const schedulePulse = (rootMidi, start, tempoMul, count, lenSec) => {
+    const f = midiToHz(rootMidi + 12);
+    const hitDur = clamp(0.30 / Math.max(0.7, tempoMul), 0.11, 0.38);
+    for (let i = 0; i < count; i += 1) {
+      const t = start + (lenSec * 0.84) * (i / Math.max(1, count - 1));
       spawnVoice({
-        type: "square",
-        freq,
+        type: "triangle",
+        freq: f,
+        freqEnd: f * 0.93,
         startTime: t,
-        endTime: t + stepSec * 0.86,
-        peak: 0.034,
-        attack: 0.01,
-        release: stepSec * 0.66,
-        filterStart: 2100,
-        filterEnd: 1250,
-        filterQ: 0.8
+        endTime: t + hitDur,
+        peak: TUNING.levels.pulsePeak,
+        attack: 0.04,
+        release: hitDur * 0.64,
+        filterStart: 640,
+        filterEnd: 390,
+        filterQ: 0.42
       });
     }
   };
 
-  const scheduleLead = (chord, startTime, chordSec, tempoMul) => {
-    const stepSec = clamp(0.62 / Math.max(0.75, tempoMul), 0.24, 0.72);
-    const noteCount = clamp(Math.round(chordSec / stepSec), 2, 6);
-    for (let i = 0; i < noteCount; i += 1) {
-      const t = startTime + chordSec * 0.16 + i * stepSec;
-      const scaleOff = NAT_MINOR_OFFSETS[(phraseCursor + i * 2) % NAT_MINOR_OFFSETS.length];
-      const midi = 72 + scaleOff + ((i % 2) ? 12 : 0);
-      const freq = midiToHz(midi);
+  const scheduleArp = (chord, start, lenSec, tempoMul) => {
+    const pattern = [0, 1, 2, 3, 2, 1, 0, 2, 1, 3, 2, 0];
+    const step = clamp(0.34 / Math.max(0.75, tempoMul), 0.10, 0.36);
+    const endAt = start + lenSec * 0.82;
+    for (let i = 0; i < pattern.length; i += 1) {
+      const t = start + i * step;
+      if (t >= endAt) break;
+      const noteIdx = pattern[i] % chord.notes.length;
+      const oct = (i % 4 === 3) ? 12 : ((i % 4 === 1) ? 24 : 0);
+      const midi = chord.notes[noteIdx] + oct;
+      const f = midiToHz(midi);
+      spawnVoice({
+        type: "square",
+        freq: f,
+        startTime: t,
+        endTime: t + step * 0.82,
+        peak: TUNING.levels.arpPeak,
+        attack: 0.01,
+        release: step * 0.60,
+        filterStart: 2200,
+        filterEnd: 1320,
+        filterQ: 0.84
+      });
+    }
+  };
+
+  const scheduleLead = (start, lenSec, tempoMul) => {
+    const step = clamp(0.56 / Math.max(0.72, tempoMul), 0.17, 0.68);
+    const count = clamp(Math.round((lenSec * 0.76) / step), 2, 8);
+    for (let i = 0; i < count; i += 1) {
+      const t = start + lenSec * 0.16 + i * step;
+      const scaleOff = NAT_MINOR_OFFSETS[(sectionCursor + i * 2) % NAT_MINOR_OFFSETS.length];
+      const midi = 72 + scaleOff + ((i % 3) === 1 ? 12 : 0);
+      const f = midiToHz(midi);
       spawnVoice({
         type: "triangle",
-        freq,
+        freq: f,
         startTime: t,
-        endTime: t + stepSec * 0.82,
-        peak: 0.025,
+        endTime: t + step * 0.78,
+        peak: TUNING.levels.leadPeak,
         attack: 0.03,
-        release: stepSec * 0.56,
-        filterStart: 1700,
-        filterEnd: 1300,
-        filterQ: 0.62
+        release: step * 0.56,
+        filterStart: 1760,
+        filterEnd: 1340,
+        filterQ: 0.64
+      });
+    }
+  };
+
+  const scheduleDrive = (rootMidi, start, lenSec, tempoMul) => {
+    const f = midiToHz(rootMidi + 24);
+    const step = clamp(0.23 / Math.max(0.82, tempoMul), 0.08, 0.24);
+    const startAt = start + lenSec * 0.22;
+    const endAt = start + lenSec * 0.90;
+    for (let t = startAt; t < endAt; t += step) {
+      spawnVoice({
+        type: "sawtooth",
+        freq: f,
+        freqEnd: f * 1.01,
+        startTime: t,
+        endTime: t + step * 0.66,
+        peak: TUNING.levels.drivePeak,
+        attack: 0.006,
+        release: step * 0.46,
+        filterStart: 3200,
+        filterEnd: 2100,
+        filterQ: 0.92
       });
     }
   };
@@ -262,34 +361,41 @@ function createAdaptiveMusicEngine(){
   const scheduleSection = (startTime) => {
     const c = ensureCtx();
     if (!c) return;
+
     if (pendingBossBoostSec > 0) {
       bossBassUntil = Math.max(bossBassUntil, c.currentTime + pendingBossBoostSec);
       pendingBossBoostSec = 0;
     }
+    if (pendingKeyShiftSec > 0) {
+      keyShiftUntil = Math.max(keyShiftUntil, c.currentTime + pendingKeyShiftSec);
+      pendingKeyShiftSec = 0;
+    }
 
     const tempoMul = computeTempoMul(startTime);
-    const chordSec = clamp(SECTION_BASE_SEC / tempoMul, 3.2, 10.5);
-    const chord = CHORDS[chordCursor % CHORDS.length];
+    const lenSec = clamp(
+      TUNING.arrangement.baseSectionSec / tempoMul,
+      TUNING.arrangement.minSectionSec,
+      TUNING.arrangement.maxSectionSec
+    );
+    const seq = TUNING.arrangement.chordSequence;
+    const chordBase = CHORDS[seq[sectionCursor % seq.length] % CHORDS.length];
+    const shift = getActiveShift(startTime);
+    const chord = shiftChord(chordBase, shift);
     const bossDrop = bossWaveActive || (startTime < bossBassUntil);
 
-    for (const note of chord.notes) schedulePad(note, startTime, chordSec);
-    scheduleBass(chord.root, startTime, chordSec, bossDrop);
+    for (const note of chord.notes) schedulePad(note, startTime, lenSec);
+    scheduleBass(chord.root, startTime, lenSec, bossDrop);
 
-    const pulseCount = clamp(Math.round(3 + tempoMul * 1.7), 2, 7);
-    for (let i = 0; i < pulseCount; i += 1) {
-      const off = (chordSec * 0.82) * (i / Math.max(1, pulseCount - 1));
-      schedulePulse(chord.root + 12, startTime + off, tempoMul);
-    }
+    const pulseCount = clamp(Math.round(3 + tempoMul * 1.95), 2, 9);
+    schedulePulse(chord.root, startTime, tempoMul, pulseCount, lenSec);
 
-    if (shouldUseArp()) {
-      scheduleArp(chord, startTime + chordSec * 0.08, chordSec, tempoMul);
-    } else {
-      scheduleLead(chord, startTime, chordSec, tempoMul);
-    }
+    if (shouldUseArp()) scheduleArp(chord, startTime + lenSec * 0.04, lenSec, tempoMul);
+    else scheduleLead(startTime, lenSec, tempoMul);
 
-    nextSectionTime = startTime + chordSec;
-    chordCursor += 1;
-    phraseCursor += 1;
+    if (shouldUseDriveLayer()) scheduleDrive(chord.root, startTime, lenSec, tempoMul);
+
+    nextSectionTime = startTime + lenSec;
+    sectionCursor += 1;
   };
 
   const scheduleTick = () => {
@@ -297,7 +403,7 @@ function createAdaptiveMusicEngine(){
     if (!c) return;
     if (c.state === "suspended") return;
     if (muted || volume <= 0) return;
-    while (nextSectionTime < c.currentTime + LOOKAHEAD_SEC) {
+    while (nextSectionTime < c.currentTime + TUNING.arrangement.lookAheadSec) {
       const start = Math.max(nextSectionTime, c.currentTime + 0.05);
       scheduleSection(start);
     }
@@ -309,11 +415,11 @@ function createAdaptiveMusicEngine(){
     if (c.state === "suspended") c.resume().catch(() => {});
     applyMasterGain();
     if (!Number.isFinite(nextSectionTime) || nextSectionTime <= 0) {
-      nextSectionTime = c.currentTime + 0.09;
+      nextSectionTime = c.currentTime + 0.10;
     }
     if (!scheduler) {
       scheduleTick();
-      scheduler = setInterval(scheduleTick, SCHEDULER_MS);
+      scheduler = setInterval(scheduleTick, TUNING.arrangement.schedulerMs);
     }
     return true;
   };
@@ -346,6 +452,7 @@ function createAdaptiveMusicEngine(){
     scene = (nextScene === "game") ? "game" : "menu";
     if (scene === "menu") {
       bossWaveActive = false;
+      currentWave = 1;
     }
   };
 
@@ -361,6 +468,9 @@ function createAdaptiveMusicEngine(){
     bossWaveActive = false;
     bossBassUntil = 0;
     pendingBossBoostSec = 0;
+    keyShiftUntil = 0;
+    pendingKeyShiftSec = 0;
+    sectionCursor = 0;
   };
 
   const onGameOver = () => {
@@ -368,30 +478,30 @@ function createAdaptiveMusicEngine(){
     bossWaveActive = false;
     bossBassUntil = 0;
     pendingBossBoostSec = 0;
+    keyShiftUntil = 0;
+    pendingKeyShiftSec = 0;
   };
 
   const onWaveStart = ({ waveNum, isBossWave=false } = {}) => {
-    const w = Math.max(1, Math.floor(Number(waveNum) || 1));
-    currentWave = w;
+    currentWave = Math.max(1, Math.floor(Number(waveNum) || 1));
     setScene("game");
     if (isBossWave) {
       bossWaveActive = true;
-      if (ctx) {
-        bossBassUntil = Math.max(bossBassUntil, ctx.currentTime + 5.0);
-      } else {
-        pendingBossBoostSec = Math.max(pendingBossBoostSec, 5.0);
-      }
+      if (ctx) bossBassUntil = Math.max(bossBassUntil, ctx.currentTime + TUNING.boss.bassMinHoldSec);
+      else pendingBossBoostSec = Math.max(pendingBossBoostSec, TUNING.boss.bassMinHoldSec);
     }
   };
 
   const onWaveEnd = ({ isBossWave=false } = {}) => {
     if (!bossWaveActive && !isBossWave) return;
     bossWaveActive = false;
-    if (ctx) {
-      bossBassUntil = Math.max(bossBassUntil, ctx.currentTime + 5.0);
-    } else {
-      pendingBossBoostSec = Math.max(pendingBossBoostSec, 5.0);
-    }
+    if (ctx) bossBassUntil = Math.max(bossBassUntil, ctx.currentTime + TUNING.boss.bassMinHoldSec);
+    else pendingBossBoostSec = Math.max(pendingBossBoostSec, TUNING.boss.bassMinHoldSec);
+  };
+
+  const onCoreDamaged = () => {
+    if (ctx) keyShiftUntil = Math.max(keyShiftUntil, ctx.currentTime + TUNING.damageShift.holdSec);
+    else pendingKeyShiftSec = Math.max(pendingKeyShiftSec, TUNING.damageShift.holdSec);
   };
 
   return {
@@ -404,7 +514,8 @@ function createAdaptiveMusicEngine(){
     onRunRestarted,
     onGameOver,
     onWaveStart,
-    onWaveEnd
+    onWaveEnd,
+    onCoreDamaged
   };
 }
 

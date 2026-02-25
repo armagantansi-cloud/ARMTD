@@ -74,7 +74,7 @@ const PEEL_BUFF_INFO = {
 
 // Versioning: patch (right) for every update, minor (middle) for big updates.
 // Major (left) is increased manually.
-const GAME_VERSION = "0.2.80";
+const GAME_VERSION = "0.2.81";
 const LOG_TIPS = [
   "Tip: Discover each tower's unique skill and prestige skill.",
   "Tip: Towers can reach level 20. Sometimes even higher.",
@@ -1234,7 +1234,8 @@ class Game {
       this.emitGameEvent(GAME_EVENTS.WAVE_STARTED, {
         waveNum,
         nextWaveNum: this.nextWaveNum,
-        endlessMode: !!this.endlessMode
+        endlessMode: !!this.endlessMode,
+        isBossWave: w.plan.some(part => String(part?.type || "") === "boss")
       });
 
       this.refreshUI(true);
@@ -1845,6 +1846,12 @@ class Game {
           if(this.coreHP<0) this.coreHP=0;
           this.runQuestState.coreDamaged = true;
           this.logEvent(`Core hit: -${dmg} HP (HP: ${this.coreHP})`);
+          this.emitGameEvent(GAME_EVENTS.CORE_DAMAGED, {
+            waveNum: hitWave,
+            damage: dmg,
+            coreHP: this.coreHP,
+            isBossSource: !!e.isBoss
+          });
         }
       }
 
@@ -3357,7 +3364,7 @@ class Game {
         const adHigh = Math.round(sim.AD[1] * sim.perks.adMul * sim.perks.dmgMul * peelAd);
         const as = Math.max(0.05, sim.baseAS * sim.perks.asMul * sim.tempASMul * peelAs);
         const magic = Math.round(sim.magicBonus * sim.perks.magMul * sim.perks.dmgMul * peelMag);
-        const bounce = sim.def.id === "peel" ? peelBounceCountFromAD(sim.AD, sim.perks.adMul) : 0;
+        const bounce = sim.def.id === "peel" ? peelBounceCountFromAD(sim.AD, sim.perks.adMul * peelAd) : 0;
         const skillText = (sim.def.skillDesc ? sim.def.skillDesc(sim) : "—");
         const peelPower = (sim.def.id === "peel") ? Math.round(peelBuffPower(sim) * 100) : 0;
 

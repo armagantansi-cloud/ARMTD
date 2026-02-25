@@ -312,7 +312,7 @@ const TOWER_DEFS = [
     {
       id: "peel",
       name: "Peel Tower",
-      cost: 12500,
+      cost: 11000,
       size: 2,
       autoAttackDesc: "Fires support bolts that grant a random short buff to a nearby tower.",
       skillName: "Core Uplink",
@@ -642,7 +642,7 @@ class Tower {
       }
     }
     getBounceCount(){
-      return peelBounceCountFromAD(this.AD, this.perks.adMul);
+      return peelBounceCountFromAD(this.AD, this.perks.adMul * this.peelMul("ad"));
     }
 
     getProjectileSpeed(){
