@@ -378,9 +378,10 @@ export function initUI(game, options={}){
       return;
     }
     if (actionPressed("mute", ev)) {
-      const muted = SFX.toggleMuted();
-      if (typeof options.onMuteToggle === "function") options.onMuteToggle(muted);
-      game.logEvent(muted ? "SFX muted." : "SFX unmuted.");
+      const muted = (typeof options.onMuteToggle === "function")
+        ? !!options.onMuteToggle()
+        : SFX.toggleMuted();
+      game.logEvent(muted ? "Muted." : "Unmuted.");
       return;
     }
     if (actionPressed("pause_menu", ev)) {

@@ -35,7 +35,7 @@ const CUSTOM_MAPS_KEY = "armtd_custom_maps_v1";
 const CUSTOM_MAPS_SCHEMA = 1;
 const PERSISTENT_STATS_KEY = "armtd_stats_lifetime_v1";
 const HIGH_KILLS_KEY = "td_highkills_v2";
-const RELEASE_RESET_KEY = "armtd_release_reset_0_2_33";
+const RELEASE_RESET_KEY = "armtd_release_reset_0_3_0";
 const START_GOLD_REWARD_KEY = "armtd_start_gold_reward_v1";
 const START_GOLD_REWARD_BONUS = 30;
 const MENU_CODEX_DRAW_ALPHA = 0.98;
@@ -162,10 +162,13 @@ bindGameplayEvents();
 
 initUI(game, {
   getKeybinds: () => settings.keybinds,
-  onMuteToggle: (muted) => {
-    settings.audio.muted = !!muted;
-    persistSettings(false);
+  onMuteToggle: () => {
+    const nextMuted = !(settings.audio.muted && settings.audio.musicMuted);
+    settings.audio.muted = nextMuted;
+    settings.audio.musicMuted = nextMuted;
+    persistSettings(true);
     syncSettingsUI();
+    return nextMuted;
   },
   onPauseToggle: (ctx) => {
     if (isMainMenuOpen() || game.gameOver) return;
@@ -1996,6 +1999,13 @@ function renderMenuPatchNotes(){
         "Adaptive music v2: added a centralized tuning block (tempo curve, arpeggio frequency, boss bass hold) for easier live balancing.",
         "Music loop was expanded with a longer C-minor-centered chord form (Cm, Bb, Ab, Eb, Gm), richer evolving sections and a late-wave drive layer.",
         "Core damage now triggers a temporary key shift, and boss detection now reliably enforces low-octave bass drop behavior."
+      ]
+    },
+    {
+      version: "0.3.0",
+      notes: [
+        "M key now toggles a full global mute (effects + music) with concise Muted/Unmuted log messages.",
+        "Release reset key updated for 0.3.0 so lifetime statistics/progress starts clean on first boot."
       ]
     }
   ];
