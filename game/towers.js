@@ -46,7 +46,9 @@ const MILESTONES = new Set([5,10,15,20]);
   }
 
   function magicPower(tLike){
-    const base = tLike?.magicBonus ?? 0;
+    const base = Number.isFinite(tLike?.magicBonusExact)
+      ? tLike.magicBonusExact
+      : (tLike?.magicBonus ?? 0);
     const mul = tLike?.perks?.magMul ?? 1;
     const peelMul = tLike?.peelBuffs?.mag?.mul ?? 1;
     return base * mul * peelMul;
@@ -76,11 +78,23 @@ const MILESTONES = new Set([5,10,15,20]);
   function archerPowerShotBonus(tLike){
     const lvl = tLike?.level ?? 1;
     const magic = magicPower(tLike);
-    // Stronger magic-scaling identity for Archer skill.
-    return 1.45 + (lvl-1)*0.038 + magic*0.085;
+    return 1.50 + (lvl-1)*0.042 + magic*0.110;
   }
 
-  const POISON_SKILL_AD_DOT_SCALE = 0.080;
+  function poisonSkillMultiplier(tLike){
+    const magic = magicPower(tLike);
+    const baseMagic = 35;
+    const effectiveMagic = Math.max(0, magic - baseMagic);
+    // Low baseline with slightly improved growth while keeping high multipliers harder to reach.
+    return 1.1 + 2.15 * (1 - Math.exp(-effectiveMagic / 1900));
+  }
+
+  function poisonFromShotValue(tLike, physRaw, magicRaw){
+    const dmgMul = tLike?.perks?.dmgMul ?? 1;
+    const shot = Math.max(0, (Number(physRaw) || 0) + (Number(magicRaw) || 0));
+    const converted = (shot / Math.max(0.25, dmgMul)) * 0.10;
+    return Math.max(1, converted);
+  }
 
   function breakerAutoShred(tLike){
     const lvl = tLike?.level ?? 1;
@@ -91,9 +105,9 @@ const MILESTONES = new Set([5,10,15,20]);
   function breakerBombProfile(tLike){
     const lvl = tLike?.level ?? 1;
     const magic = magicPower(tLike);
-    const radius = 1.48 + (lvl-1)*0.026 + magic*0.0010;
-    const shred = 10 + Math.floor((lvl-1)/2) + Math.floor(magic/2.2);
-    const magicDamage = (16 + (lvl-1)*1.35 + magic*0.95) * (tLike?.perks?.dmgMul ?? 1);
+    const radius = 1.52 + (lvl-1)*0.028 + magic*0.0014;
+    const shred = 12 + Math.floor((lvl-1)/2) + Math.floor(magic/1.6);
+    const magicDamage = (20 + (lvl-1)*1.60 + magic*1.45) * (tLike?.perks?.dmgMul ?? 1);
     return { radius, shred, magicDamage };
   }
 
@@ -103,24 +117,22 @@ const MILESTONES = new Set([5,10,15,20]);
     return Math.round(Math.sqrt(clampedArmor) * 1.15);
   }
 
-  function toxicSurgeProfile(tLike){
-    const magic = magicPower(tLike);
-    const stacksBonus = 2 + Math.floor(magic/30);
-    const perTickBoost = 1.10 + magic * 0.005;
-    return { stacksBonus, perTickBoost };
-  }
-
   function blizzardSlowProfile(tLike){
     const lvl = tLike?.level ?? 1;
     const magic = magicPower(tLike);
-    const slowPct = clamp(0.16 + (lvl-1)*0.010 + magic*0.0014, 0.16, 0.99);
-    const dur = 0.85 + (lvl-1)*0.020 + magic*0.004;
+    const slowPct = clamp(0.18 + (lvl-1)*0.011 + magic*0.0021, 0.18, 0.995);
+    const dur = 0.95 + (lvl-1)*0.024 + magic*0.0060;
     return { slowPct, duration: dur };
   }
 
   function mageChainMultiplier(level){
     const lv = clamp(level ?? 1, 1, CFG.TOWER_MAX_LEVEL);
     return 0.50 + (lv - 1) * (0.49 / (CFG.TOWER_MAX_LEVEL - 1));
+  }
+
+  function blizzardPrestigeFrostbitePerTick(tLike){
+    const lvl = Math.max(1, tLike?.level ?? 1);
+    return (18 + lvl * 3.2) * (tLike?.perks?.dmgMul ?? 1);
   }
 
   // =========================================================
@@ -270,10 +282,29 @@ function gainCurve(levelBefore) {
     return g;
   }
 
-  function sniperSecondaryScaledGain(secondaryLevel){
+  function sniperMagicBaselineAtLevel20NoSpecial(){
+    let magic = 6;
+    for (let lvl = 1; lvl < CFG.TOWER_MAX_LEVEL; lvl += 1) {
+      const g = scaledGain(lvl);
+      magic *= (1 + g * 0.30);
+    }
+    return Math.max(1, magic);
+  }
+
+  const SNIPER_MAGIC_BASELINE_LV20 = sniperMagicBaselineAtLevel20NoSpecial();
+
+  function sniperSecondaryScaledGain(secondaryLevel, tLike=null){
     const sec = Math.max(0, Math.floor(Number(secondaryLevel) || 0));
     if (sec <= 0) return 0;
-    return 0.01;
+    const magic = Math.max(0, magicPower(tLike || {}));
+    const ratio = magic / SNIPER_MAGIC_BASELINE_LV20;
+    const base = 0.0095;
+    const growth = 0.0020 * Math.pow(Math.max(0, Math.log2(1 + ratio * 0.9)), 1.9);
+    return Math.max(0.0075, base + growth);
+  }
+
+  function sniperOverlevelPct(tLike){
+    return sniperSecondaryScaledGain(1, tLike) * 100;
   }
 
   function applyUpgradeGain(tower, g){
@@ -295,7 +326,11 @@ function gainCurve(levelBefore) {
       : (tower.def.id === "breaker") ? (1 + g*0.95)
       : (tower.def.id === "archer") ? (1 + g*0.40)
       : (1 + g*0.30);
-    tower.magicBonus = Math.round(tower.magicBonus * magicMult);
+    const prevMagicExact = Number.isFinite(tower.magicBonusExact)
+      ? tower.magicBonusExact
+      : (tower.magicBonus || 0);
+    tower.magicBonusExact = Math.max(0, prevMagicExact * magicMult);
+    tower.magicBonus = Math.max(0, Math.round(tower.magicBonusExact));
 
     if (tower.def.id !== "sniper") {
       tower.manaRegen *= (1 + g*0.16);
@@ -385,31 +420,31 @@ const TOWER_DEFS = [
         tower.mana = 0;
 
         const magic = magicPower(tower);
-        const jumps = 2 + Math.floor((tower.level-1)/3) + Math.floor(magic/110);
+        const jumps = 2 + Math.floor((tower.level-1)/3) + Math.floor(magic/78);
         const mult  = mageChainMultiplier(tower.level);
-        const radius= 2.45 + (tower.level-1)*0.03 + magic*0.0012;
+        const radius= 2.55 + (tower.level-1)*0.034 + magic*0.0018;
 
         return { kind:"chain", chain: { jumps, radiusTiles: radius, multiplier: mult } };
       },
       skillDesc: (tLike) => {
         const lvl = tLike.level ?? 1;
         const magic = magicPower(tLike);
-        const jumps = 2 + Math.floor((lvl-1)/3) + Math.floor(magic/110);
+        const jumps = 2 + Math.floor((lvl-1)/3) + Math.floor(magic/78);
         const mult  = mageChainMultiplier(lvl);
-        const radius= 2.45 + (lvl-1)*0.03 + magic*0.0012;
+        const radius= 2.55 + (lvl-1)*0.034 + magic*0.0018;
         return `Chain Bolt: ${jumps} jumps in ${radius.toFixed(2)} range. Each jump keeps x${mult.toFixed(2)} damage (max x0.99).`;
       },
       projectile: { speedTilesPerSec: 7.2 },
 
       prestige: { mana: 400, name: "Arcstorm",
-        desc: "For a magic-scaled duration, towers in range gain magic-scaled mana generation (regen, on-hit, prestige)."
+        desc: "For a fixed duration, nearby towers gain a strong mana generation aura."
       }
     },
     {
       id: "breaker",
       name: "Breaker Tower",
       cost: 200,
-      autoAttackDesc: "Each auto hit permanently shreds target Armor.",
+      autoAttackDesc: (tLike) => `Shreds ${breakerAutoShred(tLike)} armor on hit.`,
       skillName: "Shatter Bomb",
       skillManaCost: 25,
       behavior: "projectile",
@@ -460,20 +495,20 @@ const TOWER_DEFS = [
       skillDesc: (tLike) => {
         const p = blizzardSlowProfile(tLike);
         const magic = magicPower(tLike);
-        const pulseMagicDamage = (8 + magic * 0.85) * (tLike?.perks?.dmgMul ?? 1);
+        const pulseMagicDamage = (10 + magic * 1.30) * (tLike?.perks?.dmgMul ?? 1);
         return `Emits a Frost Pulse: ${Math.round(p.slowPct*100)}% slow for ${p.duration.toFixed(2)}s and ${Math.round(pulseMagicDamage)} magic damage.`;
       },
       projectile: { speedTilesPerSec: 6.9 },
 
       prestige: { mana: 600, name: "Frostbite",
-        desc: "Roots one enemy in ice for 3.0s and deals magic-scaled damage over 3s."
+        desc: "Roots one enemy in ice for 3.0s and applies a heavy Frostbite DOT."
       }
     },
     {
       id: "poison",
       name: "Poison Tower",
       cost: 250,
-      autoAttackDesc: "Each hit adds +1 poison stack. Each stack deals DOT.",
+      autoAttackDesc: "Each hit applies Poison based on that shot's damage.",
       skillName: "Toxic Surge",
       skillManaCost: 35,
       behavior: "projectile",
@@ -487,25 +522,16 @@ const TOWER_DEFS = [
       skill: (tower) => {
         if (tower.mana < tower.maxMana) return null;
         tower.mana = 0;
-        const { stacksBonus, perTickBoost } = toxicSurgeProfile(tower);
-
-        return { kind:"toxic", stacksBonus, perTickBoost };
+        return { kind:"toxic", mult: poisonSkillMultiplier(tower) };
       },
       skillDesc: (tLike) => {
-        const lvl = tLike.level ?? 1;
-        const { stacksBonus, perTickBoost } = toxicSurgeProfile(tLike);
-
-        const dmgMul = (tLike?.perks?.dmgMul || 1);
-        const avgAd = (((tLike?.AD?.[0] ?? 0) + (tLike?.AD?.[1] ?? 0)) / 2) * (tLike?.perks?.adMul ?? 1);
-        const basePerTick = (2.0 + (lvl-1)*0.18) * dmgMul;
-        const totalPerTick = basePerTick + (avgAd * POISON_SKILL_AD_DOT_SCALE);
-
-        return `Toxic Surge: +${stacksBonus} instant stacks and DOT x${perTickBoost.toFixed(2)}. Current DOT/stack: ${totalPerTick.toFixed(1)} (AD included).`;
+        const mult = poisonSkillMultiplier(tLike);
+        return `Each attack deals Poison. Each skill multiplies the current Poison x${mult.toFixed(2)}.`;
       },
       projectile: { speedTilesPerSec: 7.6 },
 
       prestige: { mana: 800, name: "Plague Bomb",
-        desc: "Giant poison bomb keeps damaging and stacking poison while traveling, erupts at impact, then keeps flying."
+        desc: "Launches a giant Plague Bomb that aggressively multiplies poison across clustered enemies."
       }
     },
     {
@@ -529,12 +555,12 @@ const TOWER_DEFS = [
         return { kind:"overlevel" };
       },
       skillDesc: (tLike) => {
-        return `At full mana, gains +1 Secondary Level (unlimited).`;
+        return `At full mana, gains +1 Secondary Level (unlimited). Current gain +${sniperOverlevelPct(tLike).toFixed(2)}%.`;
       },
       projectile: { speedTilesPerSec: 12.5 },
 
       prestige: { mana: 1000, name: "Carepackage",
-        desc: "Prestige trigger grants x15 Carepackage gold payout."
+        desc: "Prestige trigger grants a massive Carepackage gold payout."
       }
     }
   ];
@@ -565,6 +591,7 @@ class Tower {
       this.critChance=b.CrC;
       this.critDmg=b.CrD;
       this.magicBonus=b.MD;
+      this.magicBonusExact=b.MD;
       this.manaRegen=b.MaR;
       this.manaOnHit=b.manaOnHit;
       this.armorPenPct=b.ArP;
@@ -587,6 +614,7 @@ class Tower {
 
       // Breaker prestige: cleave-all-in-range
       this.cleaveAll = false;
+      this.prestigeDamageMul = 1;
 
       // Targeting
       this.targetMode = "first";
@@ -594,6 +622,9 @@ class Tower {
 
       // Sniper: unlimited secondary level for normal skill overlevel
       this.secondaryLevel = 0;
+      this.prestigeGoldTotal = 0;
+      this.uplinkTotalCore = 0;
+      this.uplinkTotalGold = 0;
 
       this.perks = {
         asMul: 1,
@@ -724,13 +755,15 @@ class Tower {
 
     applySecondaryLevelGain(){
       this.secondaryLevel += 1;
-      const g = sniperSecondaryScaledGain(this.secondaryLevel);
+      const g = sniperSecondaryScaledGain(this.secondaryLevel, this);
       if (g <= 0) return;
       const mul = 1 + g;
       const low = Math.max(1, Math.round(this.AD[0] * mul));
       const high = Math.max(low, Math.round(this.AD[1] * mul));
       this.AD = [low, high];
-      this.magicBonus = Math.max(0, Math.round(this.magicBonus * mul));
+      const prevMagicExact = Number.isFinite(this.magicBonusExact) ? this.magicBonusExact : (this.magicBonus || 0);
+      this.magicBonusExact = Math.max(0, prevMagicExact * mul);
+      this.magicBonus = Math.max(0, Math.round(this.magicBonusExact));
     }
 
     usesTimedPrestige(){
@@ -1047,7 +1080,7 @@ class Tower {
         game.recordPeelUplinkCast();
       }
       game.effects.push(acquireEffectRing(this.x, this.y, this.range * 0.40, 6.0, 0.25, "rgba(56,189,248,0.75)"));
-      game.floaters.push(acquireFloatingText(this.x, this.y - 0.35, "UPLINK", 0.55, 12, false, false));
+      game.floaters.push(acquireFloatingText(this.x, this.y - 0.35, "UPLINK", 0.55, 14, false, false));
       return true;
     }
 
@@ -1065,6 +1098,7 @@ class Tower {
             // Buffları kapat
             this.forceChainAll = false;
             this.cleaveAll = false;
+            this.prestigeDamageMul = 1;
           }
         }
 
@@ -1111,9 +1145,8 @@ class Tower {
             if (!target || e.pathIndex > target.pathIndex) target = e;
           }
           if (target) {
-            const magic = magicPower(this);
             const dur = 3.0;
-            const perTick = (2.0 + magic * 1.75) * this.perks.dmgMul;
+            const perTick = blizzardPrestigeFrostbitePerTick(this);
             target.applyFrostbite(dur, perTick, this, this.magicPenFlat);
           }
         }
@@ -1163,23 +1196,25 @@ class Tower {
       if (this.def.prestige?.name) {
         const modeText = this.usesTimedPrestige() ? "Prestige active" : "Prestige cast";
         game.logEvent(`${modeText}: ${this.def.name} • ${this.def.prestige.name}`);
-        game.centerQueue.push({ text: this.def.prestige.name, life:2.0 });
+        game.floaters.push(acquireFloatingText(this.x, this.y - 0.45, `${this.def.prestige.name.toUpperCase()}`, 0.72, 15, false, false));
       }
 
       if (this.def.id === "archer") {
-        this.tempASMul = 4.0;
+        this.prestigeActive = CFG.PRESTIGE_ACTIVE_SEC * 1.35;
+        this.tempASMul = 5.2;
         return true;
       }
 
       if (this.def.id === "mage") {
-        const magic = magicPower(this);
         this.forceChainAll = false;
-        this.prestigeActive = CFG.PRESTIGE_ACTIVE_SEC + Math.min(18, magic * 0.05);
+        this.prestigeActive = CFG.PRESTIGE_ACTIVE_SEC * 1.80;
         return true;
       }
 
       if (this.def.id === "breaker") {
+        this.prestigeActive = CFG.PRESTIGE_ACTIVE_SEC * 1.45;
         this.cleaveAll = true;
+        this.prestigeDamageMul = 1.45;
         return true;
       }
 
@@ -1188,13 +1223,14 @@ class Tower {
         if (!candidates.length) {
           return false;
         }
-        const pick = candidates[Math.floor(Math.random() * candidates.length)];
-        pick.upgradeBaseStats(true);
-        game.centerQueue.push({ text:`${this.def.prestige?.name || "Linkforge"} +1 ${pick.def.name}`, life:2.0 });
+        const picks = pickN(candidates, Math.min(2, candidates.length));
+        for (const pick of picks) pick.upgradeBaseStats(true);
+        game.floaters.push(acquireFloatingText(this.x, this.y - 0.70, `LINKFORGE +${picks.length}`, 0.95, 16, false, false));
         return true;
       }
 
       if (this.def.id === "blizzard") {
+        this.prestigeActive = CFG.PRESTIGE_ACTIVE_SEC * 1.55;
         return true;
       }
 
@@ -1204,12 +1240,13 @@ class Tower {
       }
 
       if (this.def.id === "sniper") {
-        const magic = magicPower(this);
+        const prestigeMul = Math.max(24, CFG.SNIPER_CAREPACKAGE_PRESTIGE_MULT || 24);
         const base = CFG.SNIPER_CAREPACKAGE_BASE_GOLD + (game.currentWave * CFG.SNIPER_CAREPACKAGE_PER_WAVE);
-        const gold = Math.round(base * (1 + magic * 0.010) * 15);
+        const gold = Math.round(base * prestigeMul);
         game.gold += gold;
-        game.floaters.push(acquireFloatingText(game.map.exit.x+0.5, game.map.exit.y+0.5, `📦 +${formatCompact(gold)}`, 1.1, 18, false, false));
-        game.centerQueue.push({ text:`Carepackage +${gold}g`, life:2.0 });
+        this.prestigeGoldTotal = Math.max(0, this.prestigeGoldTotal + gold);
+        game.floaters.push(acquireFloatingText(game.map.exit.x+0.5, game.map.exit.y+0.5, `📦 +${formatCompact(gold)}`, 1.1, 20, false, false));
+        if (typeof game.showCarepackageNotice === "function") game.showCarepackageNotice(this, gold);
         game.logEvent(`Carepackage (Prestige): +${gold}`);
         return true;
       }
@@ -1241,19 +1278,21 @@ class Tower {
       const ax = anchor ? anchor.x : (game.map.exit.x+0.5);
       const ay = anchor ? anchor.y : (game.map.exit.y+0.5);
 
-      const magic = magicPower(this);
-      const { stacksBonus, perTickBoost } = toxicSurgeProfile(this);
-      const basePerTick = (2.0 + (this.level-1)*0.18) * this.perks.dmgMul;
-      const prestigePoisonMul = 4.2 + magic * 0.0105;
-      const perTick = basePerTick * perTickBoost * prestigePoisonMul;
+      const poisonMult = 3.6;
+      const passMagic = (220 + (this.level - 1) * 18) * this.perks.dmgMul;
 
       const applyToxicSurge = (enemy) => {
-        const burstStacks = 8 + (stacksBonus * 4) + Math.floor(magic / 16);
-        enemy.applyPoison(burstStacks, perTick, this, this.magicPenFlat);
-        const passMagic = (95 + magic * 5.8) * this.perks.dmgMul;
+        const hadPoison = (enemy.poisonStacks || 0) > 0.001;
+        if (hadPoison) {
+          enemy.multiplyPoison(poisonMult);
+        } else {
+          const basePoison = poisonFromShotValue(this, randInt(this.AD[0], this.AD[1]) * this.perks.adMul * this.peelMul("ad"), 0);
+          enemy.applyPoison(basePoison, 1, this, this.magicPenFlat);
+        }
         const dealt = enemy.takeDamage(0, passMagic, this.armorPenPct, this.magicPenFlat, this, true);
         this.damageDealt += dealt;
         game.effects.push(acquireEffectLine(enemy.x-0.12, enemy.y, enemy.x+0.12, enemy.y, 0.18, "rgba(34,197,94,0.95)", 3));
+        game.floaters.push(acquireFloatingText(enemy.x, enemy.y - 0.45, `POISON x${poisonMult.toFixed(2)}`, 0.48, 13, false, false));
       };
 
       const spawnRing = () => {
@@ -1285,12 +1324,10 @@ class Tower {
         }
       );
       game.projectiles.push(proj);
-
-      game.centerQueue.push({ text: this.def.prestige?.name || "Plague Bomb", life:2.0 });
+      game.floaters.push(acquireFloatingText(this.x, this.y - 0.6, this.def.prestige?.name?.toUpperCase() || "PLAGUE BOMB", 0.9, 15, false, false));
     }
 
     shoot(enemy, game, isCleave=false){
-      SFX.shoot();
       if (this.def.id === "archer" || this.def.id === "breaker" || this.def.id === "sniper") {
         if (enemy?.x < this.x) this.facing = -1;
         else this.facing = 1;
@@ -1299,6 +1336,10 @@ class Tower {
       let mag = (this.magicBonus || 0) * this.perks.magMul * this.peelMul("mag");
 
       if(this.def.id==="breaker") phys += breakerArmorBonus(enemy.armor);
+      if (this.def.id === "breaker" && this.cleaveAll && this.prestigeDamageMul > 1) {
+        phys *= this.prestigeDamageMul;
+        mag *= this.prestigeDamageMul;
+      }
 
       const isCrit = Math.random() < this.critChance;
       this._lastShotWasCrit = isCrit;
@@ -1313,21 +1354,25 @@ class Tower {
       // Mage prestige: tüm atışlar chain
       if (this.def.id === "mage" && this.forceChainAll) {
         const magic = magicPower(this);
-        const jumps = 3 + Math.floor((this.level-1)/2) + Math.floor(magic/110);
+        const jumps = 3 + Math.floor((this.level-1)/2) + Math.floor(magic/78);
         const mult  = mageChainMultiplier(this.level);
-        const radius= 2.65 + (this.level-1)*0.03 + magic*0.0012;
+        const radius= 2.75 + (this.level-1)*0.034 + magic*0.0018;
         skillRes = { kind:"chain", chain: { jumps, radiusTiles: radius, multiplier: mult } };
       }
 
       if (skillRes?.kind === "overlevel") {
         this.applySecondaryLevelGain();
-        game.centerQueue.push({ text:`Overlevel +1 (S:${this.secondaryLevel})`, life:1.8 });
+        const gainPct = sniperSecondaryScaledGain(this.secondaryLevel, this) * 100;
+        game.floaters.push(acquireFloatingText(this.x, this.y - 0.55, `OVERLEVEL +${gainPct.toFixed(2)}%`, 0.65, 14, false, false));
       }
 
       const fireOnce = (skillResLocal, targetEnemy) => {
         const target = targetEnemy || enemy;
         let pPhys=phys;
         let pMag=mag;
+        const poisonAutoAmount = (this.def.id === "poison")
+          ? poisonFromShotValue(this, pPhys, pMag)
+          : 0;
 
         if(skillResLocal?.bonusPhysicalMultiplier) pPhys *= skillResLocal.bonusPhysicalMultiplier;
 
@@ -1408,20 +1453,16 @@ class Tower {
 
             // Poison: kalıcı stack
             if (this.def.id === "poison") {
-              const avgAd = ((this.AD[0] + this.AD[1]) / 2) * this.perks.adMul * this.peelMul("ad");
-              const baseTick = ((2.0 + (this.level-1)*0.18) * this.perks.dmgMul) + (avgAd * POISON_SKILL_AD_DOT_SCALE);
-              let stacksAdd = 1;
-
               if (skillResLocal?.kind === "toxic") {
-                stacksAdd += skillResLocal.stacksBonus;
+                const mult = Math.max(1, Number(skillResLocal.mult) || 1);
+                const multiplied = hitEnemy.multiplyPoison(mult);
+                if (!multiplied) {
+                  hitEnemy.applyPoison(poisonAutoAmount, 1, srcTower, this.magicPenFlat);
+                }
+                game.floaters.push(acquireFloatingText(hitEnemy.x, hitEnemy.y - 0.45, `POISON x${mult.toFixed(2)}`, 0.48, 13, false, false));
+              } else {
+                hitEnemy.applyPoison(poisonAutoAmount, 1, srcTower, this.magicPenFlat);
               }
-
-              let perTick = baseTick;
-              if (skillResLocal?.kind === "toxic") {
-                perTick *= skillResLocal.perTickBoost;
-              }
-
-              hitEnemy.applyPoison(stacksAdd, perTick, srcTower, this.magicPenFlat);
               game.effects.push(acquireEffectLine(hitEnemy.x-0.12, hitEnemy.y, hitEnemy.x+0.12, hitEnemy.y, 0.18, "rgba(34,197,94,0.95)", 3));
             }
 
@@ -1431,9 +1472,8 @@ class Tower {
               hitEnemy.applySlow(bp.slowPct, bp.duration, srcTower);
 
               if (this.prestigeActive > 0 && hitEnemy.frostbiteTime <= 0 && hitEnemy.frostbiteDotTime <= 0) {
-                const magic = magicPower(this);
                 const dur = 3.0;
-                const perTick = (2.0 + magic * 1.75) * this.perks.dmgMul;
+                const perTick = blizzardPrestigeFrostbitePerTick(this);
                 hitEnemy.applyFrostbite(dur, perTick, this, this.magicPenFlat);
               }
             }
@@ -1516,7 +1556,7 @@ class Tower {
             (e)=> {
               e.applySlow(skillResLocal.slowPct, skillResLocal.duration, this);
               const rollAD = randInt(this.AD[0], this.AD[1]) * this.perks.adMul * this.peelMul("ad");
-              const basePulseMagic = (8 + magicPower(this) * 0.85) * this.perks.magMul * this.peelMul("mag");
+              const basePulseMagic = (10 + magicPower(this) * 1.30) * this.perks.magMul * this.peelMul("mag");
               let pulseMag = (basePulseMagic + rollAD * 0.35) * this.perks.dmgMul;
               const pulseCrit = Math.random() < this.critChance;
               if (pulseCrit) pulseMag *= this.critDmg;
@@ -1547,10 +1587,14 @@ export {
   tierMagicPct,
   peelBuffPower,
   peelBounceCountFromAD,
+  poisonSkillMultiplier,
+  sniperOverlevelPct,
+  sniperSecondaryScaledGain,
   MODES,
   buildChoicesForTower,
   setSpecialLegendaryMode,
   gainCurve,
+  scaledGain,
   upgradeCostCurve,
   TOWER_DEFS,
   Tower

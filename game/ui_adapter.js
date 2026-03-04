@@ -12,6 +12,7 @@ const GAME_UI_IDS = {
   winEndlessBtn: "winEndlessBtn",
   gameOverBack: "gameOverBack",
   gameOverRestartBtn: "gameOverRestartBtn",
+  gameOverInspectBtn: "gameOverInspectBtn",
   gameOverMainMenuBtn: "gameOverMainMenuBtn",
   hudGold: "hud_gold",
   hudCoreHp: "hud_corehp",
@@ -28,6 +29,7 @@ const GAME_UI_IDS = {
   speedSlider: "speedSlider",
   speedLabel: "speedLabel",
   cheatPanel: "cheatPanel",
+  cheatFormulaDebug: "cheatFormulaDebug",
   perfHud: "perfHud"
 };
 

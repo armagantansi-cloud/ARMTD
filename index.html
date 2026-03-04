@@ -275,6 +275,7 @@
         <div class="btnRow">
           <button id="cheatSpeed10Btn">10x Speed</button>
         </div>
+        <div id="cheatFormulaDebug" class="small cheatFormulaDebug">Overlevel +0.00% • Poison x1.20 • Carepackage x34</div>
       </div>
 
       <div class="panelSection speedPanel">
@@ -334,6 +335,7 @@
     <div class="sub">Core has fallen.</div>
     <div class="winActions">
       <button id="gameOverRestartBtn" class="good">Restart</button>
+      <button id="gameOverInspectBtn">Inspect Map</button>
       <button id="gameOverMainMenuBtn">Main Menu</button>
     </div>
   </div>
@@ -424,7 +426,7 @@
   window.__armtdBoot = window.__armtdBoot || { ok: false, startedAt: Date.now() };
 </script>
 <!-- Entry point (Live Server: open this index.html) -->
-<script type="module" src="game/main.js?v=0.3.0"></script>
+<script type="module" src="game/main.js?v=0.3.1"></script>
 <script>
   (() => {
     const RETRY_KEY = "armtd_boot_retry_v1";

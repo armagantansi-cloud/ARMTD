@@ -26,6 +26,8 @@ function createAdaptiveMusicEngine(){
     }),
     boss: Object.freeze({
       bassDropSemitones: 12,
+      bassSubDropSemitones: 24,
+      bassSubPeakMul: 1.70,
       bassMinHoldSec: 5.0
     }),
     damageShift: Object.freeze({
@@ -264,6 +266,23 @@ function createAdaptiveMusicEngine(){
       filterEnd: 170,
       filterQ: 0.34
     });
+    if (bossDrop) {
+      const subMidi = rootMidi - TUNING.boss.bassSubDropSemitones;
+      const subHz = midiToHz(subMidi);
+      spawnVoice({
+        type: "sine",
+        freq: subHz,
+        freqEnd: subHz * 0.985,
+        startTime: start,
+        endTime: start + lenSec * 0.88,
+        peak: peak * TUNING.boss.bassSubPeakMul,
+        attack: 0.05,
+        release: 0.70,
+        filterStart: 180,
+        filterEnd: 110,
+        filterQ: 0.30
+      });
+    }
   };
 
   const schedulePulse = (rootMidi, start, tempoMul, count, lenSec) => {
@@ -487,7 +506,19 @@ function createAdaptiveMusicEngine(){
     setScene("game");
     if (isBossWave) {
       bossWaveActive = true;
-      if (ctx) bossBassUntil = Math.max(bossBassUntil, ctx.currentTime + TUNING.boss.bassMinHoldSec);
+      if (ctx) {
+        bossBassUntil = Math.max(
+          bossBassUntil,
+          ctx.currentTime + TUNING.boss.bassMinHoldSec + TUNING.arrangement.lookAheadSec
+        );
+        // Keep current phrase alive; only pull the next phrase earlier.
+        if (!Number.isFinite(nextSectionTime) || nextSectionTime <= 0) {
+          nextSectionTime = ctx.currentTime + 0.04;
+        } else {
+          nextSectionTime = Math.min(nextSectionTime, ctx.currentTime + 0.04);
+        }
+        scheduleTick();
+      }
       else pendingBossBoostSec = Math.max(pendingBossBoostSec, TUNING.boss.bassMinHoldSec);
     }
   };
@@ -495,7 +526,7 @@ function createAdaptiveMusicEngine(){
   const onWaveEnd = ({ isBossWave=false } = {}) => {
     if (!bossWaveActive && !isBossWave) return;
     bossWaveActive = false;
-    if (ctx) bossBassUntil = Math.max(bossBassUntil, ctx.currentTime + TUNING.boss.bassMinHoldSec);
+    if (ctx) bossBassUntil = Math.max(bossBassUntil, ctx.currentTime + TUNING.boss.bassMinHoldSec + 0.25);
     else pendingBossBoostSec = Math.max(pendingBossBoostSec, TUNING.boss.bassMinHoldSec);
   };
 
@@ -520,4 +551,3 @@ function createAdaptiveMusicEngine(){
 }
 
 export { createAdaptiveMusicEngine };
-

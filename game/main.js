@@ -255,7 +255,7 @@ function createDefaultMapProgress(){
     updatedAt: Date.now(),
     maps: Array.from({ length: MAP_CARD_COUNT }, () => ({
       maxWave: 0,
-      stars: { star1: false, star2: false, star3: false }
+      stars: { star1: false, star2: false, star3: false, star4: false }
     }))
   };
 }
@@ -274,7 +274,8 @@ function normalizeMapProgress(raw){
       stars: {
         star1: !!starsRaw.star1,
         star2: !!starsRaw.star2,
-        star3: !!starsRaw.star3
+        star3: !!starsRaw.star3,
+        star4: !!starsRaw.star4
       }
     };
   }
@@ -306,6 +307,7 @@ function getTotalStars(progress = readMapProgress()){
     if (item?.stars?.star1) total += 1;
     if (item?.stars?.star2) total += 1;
     if (item?.stars?.star3) total += 1;
+    if (item?.stars?.star4) total += 1;
   }
   return total;
 }
@@ -464,6 +466,7 @@ function handleCampaignClear(payload){
   item.stars.star1 = item.stars.star1 || !!stars.star1;
   item.stars.star2 = item.stars.star2 || !!stars.star2;
   item.stars.star3 = item.stars.star3 || !!stars.star3;
+  item.stars.star4 = item.stars.star4 || !!stars.star4;
   writeMapProgress(progress);
   progressionState = applyCampaignClearToProgression(progressionState, {
     mapIndex: idx,
@@ -491,7 +494,8 @@ function escapeHtml(text){
 function getStarConditionText(starNo){
   if (starNo === 1) return "Clear wave 100 or higher.";
   if (starNo === 2) return "Clear wave 100+ without core HP loss.";
-  return "Clear wave 100+ without buying Sniper Tower.";
+  if (starNo === 3) return "Clear wave 100+ without buying Sniper Tower.";
+  return "Clear wave 100+ while never having 2 towers of the same type.";
 }
 
 function renderStarNode(starClass, lit, starNo){
@@ -951,7 +955,7 @@ const MENU_CODEX_DETAIL_DATA = {
     rows: [
       { k: "Auto", v: "Casts steady magic bolts early game, then stops basic attacking after Level 21." },
       { k: "Skill", v: "Chain Bolt jumps across nearby enemies for wave control." },
-      { k: "Prestige", v: "Creates a caster-focused aura around itself for nearby towers." }
+      { k: "Prestige", v: "Creates a fixed-power mana aura around itself for nearby towers." }
     ],
     notes: [
       "Important: after Level 21, Mage play is skill/aura-driven instead of auto-hit driven.",
@@ -991,8 +995,8 @@ const MENU_CODEX_DETAIL_DATA = {
     title: "Poison Tower",
     visual: { kind: "tower", image: "assets/poison.png" },
     rows: [
-      { k: "Auto", v: "Builds poison stacks over time." },
-      { k: "Skill", v: "Spikes existing stacks to accelerate ticking damage." },
+      { k: "Auto", v: "Each attack applies Poison based on that shot's damage." },
+      { k: "Skill", v: "Multiplies current Poison on hit targets; if none exists, applies base Poison." },
       { k: "Prestige", v: "Spreads plague pressure through clustered enemies." }
     ],
     notes: [
@@ -1006,8 +1010,8 @@ const MENU_CODEX_DETAIL_DATA = {
     visual: { kind: "tower", image: "assets/sniper.png" },
     rows: [
       { k: "Auto", v: "Very long-range heavy single shots." },
-      { k: "Skill", v: "Overlevel path grants permanent side growth over time." },
-      { k: "Prestige", v: "Care package timing gives economy tempo swings." }
+      { k: "Skill", v: "Overlevel grants permanent secondary growth, now scaling with Magic." },
+      { k: "Prestige", v: "Carepackage grants a massive instant gold spike." }
     ],
     notes: [
       "High impact on priority targets.",
@@ -2007,6 +2011,71 @@ function renderMenuPatchNotes(){
         "M key now toggles a full global mute (effects + music) with concise Muted/Unmuted log messages.",
         "Release reset key updated for 0.3.0 so lifetime statistics/progress starts clean on first boot."
       ]
+    },
+    {
+      version: "0.3.1",
+      notes: [
+        "Magic no longer scales any Prestige skill effect; Prestige power was buffed across all towers, with a large Carepackage increase for Sniper.",
+        "Standard skill magic scaling was increased globally, and Sniper Overlevel now scales with Magic (baseline +1.35% at no-magic Lv20 reference).",
+        "Sniper level-up magic growth bug was fixed with precision-based magic scaling, preventing flatlines after early levels.",
+        "Poison Tower was simplified: each attack applies Poison from shot damage, and Toxic Surge now multiplies current Poison by a magic-scaled value.",
+        "Skill notifications moved from top-center queue to floating fade text; only Prestige Unlocked remains in top notifications.",
+        "Selected panel now shows Peel Uplink total HP/Gold contribution and Sniper total Prestige Gold earned.",
+        "Boss music drop was reinforced with forced low-register reseed plus dedicated sub-bass layer for reliable one-octave-down impact."
+      ]
+    },
+    {
+      version: "0.3.2",
+      notes: [
+        "Sniper Overlevel scaling was retuned to grow slower and no longer has a hard +4% cap.",
+        "Poison Tower Toxic Surge was nerfed to a lower baseline multiplier (x1.20 start) with softer scaling.",
+        "Peel selected panel cleanup: Damage/Kills row removed, and Peel Buffs now show only active buff names.",
+        "Peel buff visuals were strengthened so buff rings around supported towers are easier to read in combat.",
+        "Skill cast floating labels were increased in size for better readability.",
+        "Sniper Carepackage payout now also appears in a side neon notice near the tower.",
+        "Adaptive boss-music transition no longer hard-resets voices on boss wave start, preventing restart/pause artifacts.",
+        "Cheat/Test panel now includes live formula debug text for Overlevel, Poison multiplier and Carepackage multiplier."
+      ]
+    },
+    {
+      version: "0.3.3",
+      notes: [
+        "Poison Toxic Surge scaling was retuned again: baseline is now x1.10 with much slower growth toward high multipliers.",
+        "Breaker skill text is now concise and direct: shows current armor shred value only.",
+        "Auto-attack shot SFX was removed to reduce audio fatigue during dense combat.",
+        "Enemy death SFX now has two random variants for less repetitive kill feedback.",
+        "Peel visuals retuned: tower buff rings are less aggressive, and buff links now animate as travelling draw-lines with moving symbols.",
+        "Added a fourth map star challenge: clear wave 100+ while never having more than one tower of any single type during the run.",
+        "Game Over now includes Inspect Map mode (frozen battlefield view), and Next Wave Now becomes Restart while game over.",
+        "Mage selected panel now shows a prestige flavor line: can’t attack due to prestige reasons."
+      ]
+    },
+    {
+      version: "0.3.4",
+      notes: [
+        "Peel buff link animation timing was reworked: symbol position and drawn line now use the same progress parameter for exact sync.",
+        "Peel buff circles were thinned slightly for a cleaner in-combat look.",
+        "Enemy death SFX variants were retuned to stay closer to the previous sound character.",
+        "Poison Toxic Surge scaling was lightly improved while keeping high multipliers harder to reach.",
+        "Breaker skill description was restored, and Breaker auto-attack text now shows current armor shred per hit.",
+        "Inspect mode exploit fixed: Fast Upgrade is blocked during game over inspect view, and restart now resets challenge-run conditions.",
+        "Next Wave Now input reliability was improved with unified pointer/click triggering and safer hit behavior."
+      ]
+    },
+    {
+      version: "0.3.5",
+      notes: [
+        "Map star tooltip layout was standardized for future stars: adaptive width, safer wrapping, and generic edge alignment.",
+        "Game Over buttons adjusted: Inspect Map is now highlighted in yellow, and Main Menu is centered on its own row.",
+        "Peel moving-symbol link experiment was rolled back for now; links returned to stable static curve visuals.",
+        "Boss octave behavior remains unchanged for now and is deferred from this patch."
+      ]
+    },
+    {
+      version: "0.3.6",
+      notes: [
+        "Map select tooltip layering fix: star descriptions now stay above neighboring map cards instead of rendering behind them."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();
@@ -2128,6 +2197,7 @@ function renderMapSelect(){
     const star1 = !!cardProgress?.stars?.star1;
     const star2 = !!cardProgress?.stars?.star2;
     const star3 = !!cardProgress?.stars?.star3;
+    const star4 = !!cardProgress?.stars?.star4;
     const maxWave = Math.max(0, Math.floor(Number(cardProgress?.maxWave) || 0));
     const playable = !!entry.playable && unlocked;
     const lockText = unlocked
@@ -2145,6 +2215,7 @@ function renderMapSelect(){
           ${renderStarNode("star2", star2, 2)}
           ${renderStarNode("star1", star1, 1)}
           ${renderStarNode("star3", star3, 3)}
+          ${renderStarNode("star4", star4, 4)}
         </div>
         <div class="mapCardStats">Max Wave: ${maxWave}</div>
         <div class="mapCardLock">${escapeHtml(lockText)}</div>

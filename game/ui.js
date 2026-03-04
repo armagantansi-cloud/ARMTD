@@ -155,7 +155,22 @@ export function initUI(game, options={}){
   renderShop();
 
   document.getElementById("startWaveBtn").onclick = () => game.start();
-  document.getElementById("nextWaveNowBtn").onclick = () => game.nextWaveNow();
+  const nextWaveNowBtnEl = document.getElementById("nextWaveNowBtn");
+  if (nextWaveNowBtnEl) {
+    let lastNextWaveTrigger = 0;
+    const triggerNextWaveNow = () => {
+      const t = performance.now();
+      if (t - lastNextWaveTrigger < 110) return;
+      lastNextWaveTrigger = t;
+      game.nextWaveNow();
+    };
+    nextWaveNowBtnEl.onclick = () => triggerNextWaveNow();
+    nextWaveNowBtnEl.onpointerdown = (ev) => {
+      ev.preventDefault();
+      triggerNextWaveNow();
+    };
+    nextWaveNowBtnEl.style.touchAction = "manipulation";
+  }
   const nextMapBtn = document.getElementById("nextMapBtn");
   if (nextMapBtn) nextMapBtn.onclick = () => game.changeMap();
   if (cheatGoldBtn) cheatGoldBtn.onclick = () => { game.gold += 1000000; game.refreshUI(true); };
@@ -307,6 +322,7 @@ export function initUI(game, options={}){
   }
 
   function upgradeToNextMultipleOfFive(){
+    if(game.gameOver) return;
     const t=game.selectedTowerInstance;
     if(!t) return;
     if(!t.canUpgrade()) return;

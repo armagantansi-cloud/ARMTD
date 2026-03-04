@@ -85,12 +85,17 @@ const SFX = (() => {
   };
 
   const shoot = () => {
-    const t = performance.now() / 1000;
-    const prev = last.get("shoot") || 0;
-    if (t - prev < 0.07) return;
-    if (Math.random() > 0.18) return;
-    last.set("shoot", t);
-    tone({ freq: 780 + Math.random() * 120, type: "sine", dur: 0.02, vol: 0.07, attack: 0.001, decay: 0.03, curve: -0.25 });
+    // Auto-attack shot SFX intentionally disabled to avoid audio fatigue.
+    return;
+  };
+
+  const enemyDie = () => {
+    if (!canPlay("enemyDie", 0.035)) return;
+    if (Math.random() < 0.5) {
+      tone({ freq: 760 + Math.random() * 130, type: "sine", dur: 0.020, vol: 0.072, attack: 0.001, decay: 0.028, curve: -0.26 });
+      return;
+    }
+    tone({ freq: 700 + Math.random() * 120, type: "triangle", dur: 0.024, vol: 0.068, attack: 0.001, decay: 0.030, curve: -0.24 });
   };
 
   const gold = (amount = 1) => {
@@ -179,6 +184,7 @@ const SFX = (() => {
     place,
     sell,
     shoot,
+    enemyDie,
     gold,
     gameOver,
     prestige,

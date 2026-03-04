@@ -4,7 +4,17 @@ import { SFX } from "./audio.js";
 import { GameMap } from "./map.js";
 import { Enemy, computePrevWaveTotals, listEnemyModifiers } from "./enemies.js";
 import { scaleForWave, waveModifiers, WaveState, setEndlessScalingEnabled, getWaveEnemyCap } from "./waves.js";
-import { Tower, milestoneTier, buildChoicesForTower, gainCurve, upgradeCostCurve, peelBuffPower, peelBounceCountFromAD } from "./towers.js";
+import {
+  Tower,
+  milestoneTier,
+  buildChoicesForTower,
+  scaledGain,
+  upgradeCostCurve,
+  peelBuffPower,
+  peelBounceCountFromAD,
+  poisonSkillMultiplier,
+  sniperOverlevelPct
+} from "./towers.js";
 import { openModal, closeModal, isModalOpen } from "./ui.js";
 import { createGameUiAdapter } from "./ui_adapter.js";
 import { SpatialIndex } from "./spatial_index.js";
@@ -74,7 +84,7 @@ const PEEL_BUFF_INFO = {
 
 // Versioning: patch (right) for every update, minor (middle) for big updates.
 // Major (left) is increased manually.
-const GAME_VERSION = "0.3.0";
+const GAME_VERSION = "0.3.6";
 const LOG_TIPS = [
   "Tip: Discover each tower's unique skill and prestige skill.",
   "Tip: Towers can reach level 20. Sometimes even higher.",
@@ -145,13 +155,13 @@ function addRoundRectPath(ctx, x, y, w, h, r){
 }
 
 function magePrestigeAuraMulFromMagic(magic){
-  const m = Math.max(0, Number(magic) || 0);
-  return 5 + Math.pow(m / 260, 0.76) * 2.10;
+  void magic;
+  return 8.8;
 }
 
 function magePrestigeAuraRangeBonusFromMagic(magic){
-  const m = Math.max(0, Number(magic) || 0);
-  return Math.pow(m / 600, 0.60) * 0.45;
+  void magic;
+  return 1.20;
 }
 
 function createEmptyRunStats(){
@@ -186,6 +196,7 @@ function createEmptyRunQuestState(){
   return {
     coreDamaged: false,
     sniperPurchased: false,
+    uniqueTowerTypesOnly: true,
     campaignCleared: false,
     clearedAtWave: 0
   };
@@ -218,6 +229,7 @@ function normalizeRunQuestState(raw){
   if (!raw || typeof raw !== "object") return base;
   base.coreDamaged = !!raw.coreDamaged;
   base.sniperPurchased = !!raw.sniperPurchased;
+  base.uniqueTowerTypesOnly = raw.uniqueTowerTypesOnly !== false;
   base.campaignCleared = !!raw.campaignCleared;
   base.clearedAtWave = Math.floor(clampNumber(raw.clearedAtWave, 0, 0));
   return base;
@@ -390,6 +402,7 @@ class Game {
       this.screenShakePower = 0;
 
       this.gameOver=false;
+      this.gameOverInspectMode = false;
       this.highKills=[];
 
       this.anyBreakerPrestigeActive = false;
@@ -397,6 +410,7 @@ class Game {
       this.peelUplinkCastsByWave = {};
       this.lastUplinkRewardWave = 0;
       this.waveEndUplinkNotice = null;
+      this.carepackageNotice = null;
       this.waveStartCheckpoint = null;
       this.nextWaveNowGoldBuff = { mult: 1, timeLeft: 0, maxTime: 0 };
       this._prevWaveActive = false;
@@ -452,6 +466,7 @@ class Game {
       if (this.winEndlessBtn) this.winEndlessBtn.onclick = () => this.enterEndlessMode();
       this.gameOverBack = ui.gameOverBack;
       this.gameOverRestartBtn = ui.gameOverRestartBtn;
+      this.gameOverInspectBtn = ui.gameOverInspectBtn;
       this.gameOverMainMenuBtn = ui.gameOverMainMenuBtn;
       this.hudGoldEl = ui.hudGold;
       this.hudCoreHpEl = ui.hudCoreHp;
@@ -465,8 +480,10 @@ class Game {
       this.upgradeBtnHudEl = ui.upgradeBtnHud;
       this.fastUpgradeBtnHudEl = ui.fastUpgradeBtnHud;
       this.sellBtnHudEl = ui.sellBtnHud;
+      this.cheatFormulaDebugEl = ui.cheatFormulaDebug;
       this.onGameOverMainMenu = null;
       if (this.gameOverRestartBtn) this.gameOverRestartBtn.onclick = () => this.restart();
+      if (this.gameOverInspectBtn) this.gameOverInspectBtn.onclick = () => this.enterGameOverInspectMode();
       if (this.gameOverMainMenuBtn) {
         this.gameOverMainMenuBtn.onclick = () => {
           this.hideGameOverModal();
@@ -669,6 +686,21 @@ class Game {
       this._campaignClearNotified = false;
     }
 
+    evaluateUniqueTowerTypeChallenge(){
+      if (!this.runQuestState?.uniqueTowerTypesOnly) return;
+      const counts = Object.create(null);
+      for (const tower of this.towers) {
+        const towerId = tower?.def?.id;
+        if (!towerId) continue;
+        counts[towerId] = (counts[towerId] || 0) + 1;
+        if (counts[towerId] > 1) {
+          this.runQuestState.uniqueTowerTypesOnly = false;
+          this.logEvent("Challenge failed: duplicate tower type built.");
+          return;
+        }
+      }
+    }
+
     updateMaxWaveSeen(waveNum){
       const wave = Math.floor(clampNumber(waveNum, 0, 0));
       if (wave <= 0) return;
@@ -793,7 +825,8 @@ class Game {
       return {
         star1: !!cleared,
         star2: !!cleared && !quest.coreDamaged,
-        star3: !!cleared && !quest.sniperPurchased
+        star3: !!cleared && !quest.sniperPurchased,
+        star4: !!cleared && !!quest.uniqueTowerTypesOnly
       };
     }
 
@@ -852,6 +885,7 @@ class Game {
         critChance: clamp(clampNumber(tower.critChance, 0, tower.def.base?.CrC ?? 0), 0, 1),
         critDmg: clampNumber(tower.critDmg, 1, tower.def.base?.CrD ?? 1.5),
         magicBonus: clampNumber(tower.magicBonus, 0, tower.def.base?.MD ?? 0),
+        magicBonusExact: clampNumber(tower.magicBonusExact, 0, tower.def.base?.MD ?? 0),
         manaRegen: clampNumber(tower.manaRegen, 0, tower.def.base?.MaR ?? 0),
         manaOnHit: clampNumber(tower.manaOnHit, 0, tower.def.base?.manaOnHit ?? 0),
         armorPenPct: clamp(clampNumber(tower.armorPenPct, 0, tower.def.base?.ArP ?? 0), 0, 2),
@@ -861,6 +895,10 @@ class Game {
         prestigeMaxMana: clampNumber(tower.prestigeMaxMana, 0, tower.def.prestige?.mana ?? 0),
         prestigeMana: clampNumber(tower.prestigeMana, 0, 0),
         prestigeActive: clampNumber(tower.prestigeActive, 0, 0),
+        prestigeDamageMul: clampNumber(tower.prestigeDamageMul, 1, 1),
+        prestigeGoldTotal: clampNumber(tower.prestigeGoldTotal, 0, 0),
+        uplinkTotalCore: clampNumber(tower.uplinkTotalCore, 0, 0),
+        uplinkTotalGold: clampNumber(tower.uplinkTotalGold, 0, 0),
         tempASMul: clampNumber(tower.tempASMul, 0.05, 1),
         forceChainAll: !!tower.forceChainAll,
         cleaveAll: !!tower.cleaveAll,
@@ -907,6 +945,8 @@ class Game {
       tower.critChance = clamp(clampNumber(raw.critChance, 0, def.base.CrC), 0, 1);
       tower.critDmg = clampNumber(raw.critDmg, 1, def.base.CrD);
       tower.magicBonus = clampNumber(raw.magicBonus, 0, def.base.MD);
+      tower.magicBonusExact = clampNumber(raw.magicBonusExact, 0, tower.magicBonus);
+      if (tower.magicBonusExact <= 0) tower.magicBonusExact = tower.magicBonus;
       tower.manaRegen = clampNumber(raw.manaRegen, 0, def.base.MaR);
       tower.manaOnHit = clampNumber(raw.manaOnHit, 0, def.base.manaOnHit);
       tower.armorPenPct = clamp(clampNumber(raw.armorPenPct, 0, def.base.ArP), 0, 2);
@@ -916,6 +956,10 @@ class Game {
       tower.prestigeMaxMana = clampNumber(raw.prestigeMaxMana, 0, def.prestige?.mana ?? 0);
       tower.prestigeMana = clamp(clampNumber(raw.prestigeMana, 0, 0), 0, tower.prestigeMaxMana || 0);
       tower.prestigeActive = clampNumber(raw.prestigeActive, 0, 0);
+      tower.prestigeDamageMul = clampNumber(raw.prestigeDamageMul, 1, 1);
+      tower.prestigeGoldTotal = clampNumber(raw.prestigeGoldTotal, 0, 0);
+      tower.uplinkTotalCore = clampNumber(raw.uplinkTotalCore, 0, 0);
+      tower.uplinkTotalGold = clampNumber(raw.uplinkTotalGold, 0, 0);
       tower.tempASMul = clampNumber(raw.tempASMul, 0.05, 1);
       tower.forceChainAll = !!raw.forceChainAll;
       tower.cleaveAll = !!raw.cleaveAll;
@@ -1015,6 +1059,7 @@ class Game {
         const restored = this.restoreTowerState(tRaw);
         if (restored) this.towers.push(restored);
       }
+      this.evaluateUniqueTowerTypeChallenge();
 
       this.enemies = [];
       this.projectiles = [];
@@ -1030,6 +1075,7 @@ class Game {
       this.peelUplinkCastsByWave = {};
       this.lastUplinkRewardWave = 0;
       this.waveEndUplinkNotice = null;
+      this.carepackageNotice = null;
       this.waveStartCheckpoint = null;
       this.nextWaveNowGoldBuff = { mult: 1, timeLeft: 0, maxTime: 0 };
       this._prevWaveActive = false;
@@ -1161,6 +1207,7 @@ class Game {
       this.peelUplinkCastsByWave = {};
       this.lastUplinkRewardWave = 0;
       this.waveEndUplinkNotice = null;
+      this.carepackageNotice = null;
       this.waveStartCheckpoint = null;
       this._prevWaveActive = false;
       this.endlessMode = false;
@@ -1258,7 +1305,10 @@ class Game {
     }
 
     nextWaveNow(){
-      if(this.gameOver) return;
+      if(this.gameOver){
+        this.restart();
+        return;
+      }
       if(this.winModalOpen) return;
       if(!this.started){ this.start(); return; }
       const alive = this.enemies.filter(e => !e.dead && !e.reachedExit).length;
@@ -1333,14 +1383,18 @@ class Game {
       const peelMagic = peel
         ? Math.round((peel.magicBonus || 0) * (peel.perks?.magMul ?? 1) * (peel.peelMul?.("mag") ?? 1))
         : 0;
-      const coreMul = 1 + Math.min(0.60, peelMagic / 2500); // up to +60%
-      const goldMul = 1 + Math.min(0.80, peelMagic / 1800); // up to +80%
+      const coreMul = 1 + Math.min(0.90, peelMagic / 1800); // up to +90%
+      const goldMul = 1 + Math.min(1.20, peelMagic / 1200); // up to +120%
 
       const coreGain = Math.max(1, Math.round(casts * coreMul));
       const goldPerCast = Math.max(12, Math.round(8 + waveNum * 2.2));
       const goldGain = Math.max(1, Math.round(casts * goldPerCast * goldMul));
       this.coreHP += coreGain;
       this.gold += goldGain;
+      if (peel) {
+        peel.uplinkTotalCore = Math.max(0, (peel.uplinkTotalCore || 0) + coreGain);
+        peel.uplinkTotalGold = Math.max(0, (peel.uplinkTotalGold || 0) + goldGain);
+      }
       this.waveEndUplinkNotice = {
         life: 3.6,
         maxLife: 3.6,
@@ -1350,6 +1404,16 @@ class Game {
         goldGain
       };
       this.logEvent(`Core Uplink payout: Wave ${waveNum} | casts ${casts} | Magic ${peelMagic} | +${coreGain} Core | +${goldGain} Gold`);
+    }
+
+    showCarepackageNotice(tower, goldGain){
+      if (!tower || !Number.isFinite(goldGain) || goldGain <= 0) return;
+      this.carepackageNotice = {
+        life: 3.2,
+        maxLife: 3.2,
+        tower,
+        goldGain: Math.max(1, Math.round(goldGain))
+      };
     }
 
     findNearestPathIndex(x,y){
@@ -1578,12 +1642,13 @@ class Game {
         this.refreshUI(true);
       });
       this.cv.addEventListener("click",(ev)=>{
-        if(this.gameOver) return;
+        const inspectMode = this.gameOver && this.gameOverInspectMode;
+        if(this.gameOver && !inspectMode) return;
         if (isModalOpen()) return;
 
         const {x:mx,y:my}=this.eventToCanvasXY(ev);
         const targetUi = this.getTowerTargetUiRects(this.selectedTowerInstance);
-        if (targetUi) {
+        if (targetUi && !inspectMode) {
           if (this.pointInRect(mx, my, targetUi.left)) {
             this.selectedTowerInstance.cycleTargetMode(-1);
             this.refreshUI(true);
@@ -1618,6 +1683,10 @@ class Game {
         }
 
         this.clearSelection();
+        if (inspectMode) {
+          this.refreshUI(true);
+          return;
+        }
 
         if(!this.selectedTowerDef){ this.refreshUI(true); return; }
         if (!this.canPlaceTowerAt(g.x, g.y, this.selectedTowerDef)) {
@@ -1634,6 +1703,7 @@ class Game {
         this.gold -= cost;
         this.towers.push(new Tower(this.selectedTowerDef, g.x, g.y, this));
         this.recordTowerBuilt(this.selectedTowerDef.id);
+        this.evaluateUniqueTowerTypeChallenge();
         if (this.selectedTowerDef.id === "sniper") this.runQuestState.sniperPurchased = true;
         SFX.place();
         this.refreshUI(true);
@@ -1693,6 +1763,11 @@ class Game {
       if(this.gameOver) return;
       this.hideWinModal();
       this.gameOver=true;
+      this.gameOverInspectMode = false;
+      this.clearPlacement();
+      this.clearSelection();
+      this.selectedEnemy = null;
+      this.hoverGrid = null;
       this.showGameOverModal();
       SFX.gameOver();
       this.logEvent("GAME OVER. Core has fallen.");
@@ -1709,6 +1784,15 @@ class Game {
 
     hideGameOverModal(){
       if (this.gameOverBack) this.gameOverBack.style.display = "none";
+    }
+
+    enterGameOverInspectMode(){
+      if (!this.gameOver) return;
+      this.gameOverInspectMode = true;
+      this.hideGameOverModal();
+      this.clearPlacement();
+      this.logEvent("Inspect mode: battlefield frozen, restart to play again.");
+      this.refreshUI(true);
     }
 
     restart(){
@@ -1741,6 +1825,7 @@ class Game {
       this.peelUplinkCastsByWave = {};
       this.lastUplinkRewardWave = 0;
       this.waveEndUplinkNotice = null;
+      this.carepackageNotice = null;
       this.waveStartCheckpoint = null;
       this._prevWaveActive = false;
       this.endlessMode = false;
@@ -1752,10 +1837,12 @@ class Game {
       this.syncSpeedUI(this.gameSpeed);
       setEndlessScalingEnabled(false);
       this.resetRunStats();
+      this.resetRunQuestState();
       this.seenModifierIds = new Set();
       this.closeModifierIntro();
 
       this.gameOver=false;
+      this.gameOverInspectMode = false;
       this.emitGameEvent(GAME_EVENTS.RUN_RESTARTED, {
         mapIndex: this.mapIndex,
         isCustomMapRun: !!this.isCustomMapRun
@@ -1864,10 +1951,10 @@ class Game {
       // Archer prestige aura: mapteki tÃ¼m archerlara AS x4
       const anyArcherPrestigeActive = this.towers.some(t => t.def.id==="archer" && t.prestigeActive > 0);
       for (const t of this.towers) {
-        if (t.def.id === "archer") t.tempASMul = anyArcherPrestigeActive ? 4.0 : 1.0;
+        if (t.def.id === "archer") t.tempASMul = anyArcherPrestigeActive ? 5.2 : 1.0;
       }
 
-      // Mage prestige aura: towers in range gain mana generation (scaled by Mage magic).
+      // Mage prestige aura: towers in range gain fixed high mana generation.
       let hasMageAura = false;
       for (const t of this.towers) {
         t._manaGainTempMul = 1;
@@ -1952,6 +2039,7 @@ class Game {
           const gain = Math.max(0, Math.round(e.wealth * goldMul));
           this.gold += gain;
           goldGained += gain;
+          if (typeof SFX.enemyDie === "function") SFX.enemyDie();
         }
       }
       if (goldGained > 0) SFX.gold(goldGained);
@@ -1962,6 +2050,11 @@ class Game {
       if (this.waveEndUplinkNotice) {
         this.waveEndUplinkNotice.life -= dt;
         if (this.waveEndUplinkNotice.life <= 0) this.waveEndUplinkNotice = null;
+      }
+      if (this.carepackageNotice) {
+        this.carepackageNotice.life -= dt;
+        const towerAlive = this.towers.includes(this.carepackageNotice.tower);
+        if (this.carepackageNotice.life <= 0 || !towerAlive) this.carepackageNotice = null;
       }
 
       const waveActiveNow = this.isWaveActive();
@@ -2638,13 +2731,22 @@ class Game {
             const info = PEEL_BUFF_INFO[kind] || { color: "rgba(14,165,233,0.95)" };
             const total = buff.maxTime ?? CFG.PEEL_BUFF_DURATION;
             const a = clamp(buff.time / total, 0, 1);
-            const ringBase = this.tileSize * 0.34 * (t.size ?? 1);
-            const ringGap = this.tileSize * 0.06;
+            const ringBase = this.tileSize * 0.40 * (t.size ?? 1);
+            const ringGap = this.tileSize * 0.095;
             const r = ringBase + idx * ringGap;
-            ctx.strokeStyle = info.color.replace(/[\d.]+\)$/,""+(0.25 + 0.35 * a)+")");
-            ctx.lineWidth = 2;
+            ctx.save();
+            ctx.strokeStyle = info.color.replace(/[\d.]+\)$/,""+(0.64 + 0.28 * a)+")");
+            ctx.lineWidth = 3.0;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = info.color.replace(/[\d.]+\)$/,"0.80)");
             ctx.beginPath();
             ctx.arc(cx, cy, r, 0, Math.PI*2);
+            ctx.stroke();
+            ctx.restore();
+            ctx.strokeStyle = info.color.replace(/[\d.]+\)$/,""+(0.80 + 0.16 * a)+")");
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.arc(cx, cy, Math.max(1, r - this.tileSize * 0.04), 0, Math.PI*2);
             ctx.stroke();
             idx += 1;
           }
@@ -3199,12 +3301,25 @@ class Game {
         drawNeonBox(leftX, y, size, size, "CORE UPLINK", `+${formatCompact(n.coreGain)} HP`, `Wave ${n.waveNum} • ${n.casts} casts`, "rgba(56,189,248,0.95)", a);
         drawNeonBox(rightX, y, size, size, "GOLD PAYOUT", `+${formatCompact(n.goldGain)}g`, `Wave ${n.waveNum} • ${n.casts} casts`, "rgba(250,204,21,0.95)", a);
       }
+      if (this.carepackageNotice) {
+        const n = this.carepackageNotice;
+        const a = clamp((n.life ?? 0) / (n.maxLife ?? 3.2), 0, 1);
+        const size = 148;
+        const sniper = this.towers.includes(n.tower) ? n.tower : null;
+        const sniperCx = sniper ? (this.offsetX + sniper.x * this.tileSize) : (this.cv.width * 0.62);
+        const sniperCy = sniper ? (this.offsetY + sniper.y * this.tileSize) : (this.cv.height * 0.46);
+        const sniperHalfPx = sniper ? ((sniper.size ?? 1) * this.tileSize * 0.5) : (this.tileSize * 0.5);
+        const gap = sniperHalfPx + 26;
+        const x = clamp(sniperCx + gap, 20, this.cv.width - size - 20);
+        const y = clamp(sniperCy - size * 0.5, 20, this.cv.height - size - 20);
+        drawNeonBox(x, y, size, size, "CAREPACKAGE", `+${formatCompact(n.goldGain)}g`, "Sniper Prestige", "rgba(250,204,21,0.95)", a);
+      }
 
       // Selected tower target panel is drawn last so it stays in front.
       this.drawSelectedTargetPanel(ctx);
 
       // Game over
-      if(this.gameOver){
+      if(this.gameOver && !this.gameOverInspectMode){
         ctx.fillStyle="rgba(0,0,0,0.62)";
         ctx.fillRect(0,0,this.cv.width,this.cv.height);
 
@@ -3223,6 +3338,20 @@ class Game {
           ctx.fillText(`${i+1}. ${list[i]}`, this.cv.width/2, y);
           y += 18;
         }
+      }
+      if (this.gameOver && this.gameOverInspectMode) {
+        ctx.save();
+        ctx.fillStyle = "rgba(15,23,42,0.72)";
+        ctx.fillRect(14, 12, 248, 32);
+        ctx.strokeStyle = "rgba(125,211,252,0.72)";
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(14, 12, 248, 32);
+        ctx.fillStyle = "rgba(186,230,253,0.95)";
+        ctx.font = "700 13px system-ui";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText("Inspect Mode - Build Locked", 24, 28);
+        ctx.restore();
       }
 
       this.offsetX = baseOffsetX;
@@ -3265,18 +3394,41 @@ class Game {
         startBtn.style.display = this.started ? "none" : "";
       }
       if (nextBtn) {
-        nextBtn.disabled = (!this.started) || this.gameOver || this.winModalOpen;
-        nextBtn.classList.toggle("expanded", !!this.started);
-        const buff = this.nextWaveNowGoldBuff || { mult: 1, timeLeft: 0, maxTime: 0 };
-        const active = buff.timeLeft > 0 && buff.mult > 1;
-        const ratio = active && buff.maxTime > 0 ? clamp(buff.timeLeft / buff.maxTime, 0, 1) : 0;
-        const glow = active ? clamp((buff.mult - 1) / 1.2, 0, 1.2) : 0;
-        nextBtn.style.setProperty("--next-wave-fill", ratio.toFixed(4));
-        nextBtn.style.setProperty("--next-wave-glow", glow.toFixed(4));
-        const label = active
-          ? `Next Wave Now • ${buff.mult.toFixed(1)}x Gold • ${buff.timeLeft.toFixed(1)}s`
-          : "Next Wave Now";
-        nextBtn.innerHTML = `<span>${label}</span>`;
+        if (this.gameOver) {
+          nextBtn.disabled = false;
+          nextBtn.classList.add("expanded");
+          nextBtn.style.setProperty("--next-wave-fill", "0");
+          nextBtn.style.setProperty("--next-wave-glow", "0");
+          nextBtn.innerHTML = "<span>Restart</span>";
+        } else {
+          nextBtn.disabled = (!this.started) || this.winModalOpen;
+          nextBtn.classList.toggle("expanded", !!this.started);
+          const buff = this.nextWaveNowGoldBuff || { mult: 1, timeLeft: 0, maxTime: 0 };
+          const active = buff.timeLeft > 0 && buff.mult > 1;
+          const ratio = active && buff.maxTime > 0 ? clamp(buff.timeLeft / buff.maxTime, 0, 1) : 0;
+          const glow = active ? clamp((buff.mult - 1) / 1.2, 0, 1.2) : 0;
+          nextBtn.style.setProperty("--next-wave-fill", ratio.toFixed(4));
+          nextBtn.style.setProperty("--next-wave-glow", glow.toFixed(4));
+          const label = active
+            ? `Next Wave Now • ${buff.mult.toFixed(1)}x Gold • ${buff.timeLeft.toFixed(1)}s`
+            : "Next Wave Now";
+          nextBtn.innerHTML = `<span>${label}</span>`;
+        }
+      }
+
+      if (this.cheatFormulaDebugEl) {
+        const selected = this.selectedTowerInstance || null;
+        const sniperTower = (selected?.def?.id === "sniper")
+          ? selected
+          : (this.towers.find(t => t.def?.id === "sniper") || null);
+        const poisonTower = (selected?.def?.id === "poison")
+          ? selected
+          : (this.towers.find(t => t.def?.id === "poison") || null);
+        const fallback = { magicBonusExact: 0, magicBonus: 0, perks: { magMul: 1 }, peelBuffs: { mag: { mul: 1 } } };
+        const overPct = sniperOverlevelPct(sniperTower || fallback);
+        const poisonMul = poisonSkillMultiplier(poisonTower || fallback);
+        const carepackageMul = Math.max(24, CFG.SNIPER_CAREPACKAGE_PRESTIGE_MULT || 24);
+        this.cheatFormulaDebugEl.textContent = `Overlevel +${overPct.toFixed(2)}% • Poison x${poisonMul.toFixed(2)} • Carepackage x${carepackageMul}`;
       }
 
       const info=this.selectedInfoHudEl;
@@ -3284,6 +3436,7 @@ class Game {
       const fastBtn=this.fastUpgradeBtnHudEl;
       const sellBtn=this.sellBtnHudEl;
       if (!info || !upBtn || !sellBtn) return;
+      const inspectMode = this.gameOver && this.gameOverInspectMode;
       const calcFastUpgradeCost = (t) => {
         if (!t) return null;
         const target = Math.min(CFG.TOWER_MAX_LEVEL, (Math.floor(t.level / 5) + 1) * 5);
@@ -3310,6 +3463,7 @@ class Game {
           AD: [t.AD[0], t.AD[1]],
           baseAS: t.baseAS,
           magicBonus: t.magicBonus,
+          magicBonusExact: Number(t.magicBonusExact ?? t.magicBonus ?? 0),
           manaOnHit: t.manaOnHit,
           perks: {
             adMul: t.perks.adMul,
@@ -3327,9 +3481,7 @@ class Game {
         const count = Math.max(0, Math.floor(steps));
         for (let i = 0; i < count; i += 1) {
           const lvlBefore = sim.level;
-          let g = gainCurve(lvlBefore);
-          if (lvlBefore === 19) g *= 2;
-          if (lvlBefore === 20) g *= 4;
+          const g = scaledGain(lvlBefore);
           const adGainMul = (sim.def.id === "sniper")
             ? (1 + g * 1.35)
             : (sim.def.id === "archer")
@@ -3347,7 +3499,8 @@ class Game {
             : (sim.def.id === "archer")
               ? (1 + g * 0.40)
               : (1 + g * 0.30);
-          sim.magicBonus = Math.round(sim.magicBonus * magicMult);
+          sim.magicBonusExact = Math.max(0, sim.magicBonusExact * magicMult);
+          sim.magicBonus = Math.max(0, Math.round(sim.magicBonusExact));
           if (sim.def.id !== "sniper") sim.manaOnHit *= (1 + g * 0.12);
           sim.level = (lvlBefore === CFG.TOWER_MAX_LEVEL) ? CFG.PRESTIGE_LEVEL : (lvlBefore + 1);
         }
@@ -3378,7 +3531,7 @@ class Game {
       };
       resetFastBtn();
 
-      if(this.gameOver){
+      if(this.gameOver && !this.gameOverInspectMode){
         info.innerHTML = `
           <div class="selRow"><div class="k">Status</div><div class="v"><b>GAME OVER</b></div></div>
           <div class="selRow"><div class="k">Kills</div><div class="v">${this.totalKills}</div></div>
@@ -3471,7 +3624,7 @@ class Game {
       // Tower selected
       if(this.selectedTowerInstance){
         const t=this.selectedTowerInstance;
-        const canUp=t.canUpgrade();
+        const canUp=!inspectMode && t.canUpgrade();
         const cost=canUp ? t.upgradeCost() : null;
         const refund=Math.round(t.spentGold*0.50);
         const fastCost = canUp ? calcFastUpgradeCost(t) : null;
@@ -3486,12 +3639,14 @@ class Game {
         const peelBuffLine = peelBuffs.length
           ? `<div class="selRow"><div class="k">Peel Buffs</div><div class="v">${peelBuffs.map(([k,b]) => {
               const info = PEEL_BUFF_INFO[k] || { name: k.toUpperCase() };
-              const pct = (k === "purge") ? "" : ` +${Math.round((b.power||0)*100)}%`;
-              return `${info.name}${pct} (${b.time.toFixed(1)}s)`;
+              void b;
+              return `${info.name}`;
             }).join(" • ")}</div></div>`
           : ``;
         const baseSkillTextRaw = baseView?.skillText || "—";
-        const autoAttackText = t.def.autoAttackDesc || "—";
+        const autoAttackText = (typeof t.def.autoAttackDesc === "function")
+          ? (t.def.autoAttackDesc(t) || "—")
+          : (t.def.autoAttackDesc || "—");
         const skillText = baseSkillTextRaw.replaceAll("\n","<br/>");
         const prestigeText = t.def.prestige ? `${t.def.prestige.name}: ${t.def.prestige.desc}` : "—";
         const hideMageCombatDetail = (t.def.id === "mage" && t.level >= CFG.PRESTIGE_LEVEL);
@@ -3504,6 +3659,12 @@ class Game {
           ? `${t.prestigeMana.toFixed(0)}/${t.prestigeMaxMana} (${(t.prestigeActive>0? `ACTIVE ${t.prestigeActive.toFixed(1)}s` : "ready in ~"+Math.max(0, (t.prestigeMaxMana - t.prestigeMana)/(t.prestigeMaxMana/CFG.PRESTIGE_RECHARGE_TIME_SEC)).toFixed(0)+"s")})`
           : "";
         const damageSummary = `${formatCompact(t.damageDealt)} / ${t.kills} (${dmgPct.toFixed(1)}%)`;
+        const peelUplinkTotalsLine = isPeel
+          ? `<div class="selRow"><div class="k">Uplink HP / Gold</div><div class="v">+${formatCompact(t.uplinkTotalCore || 0)} HP / +${formatCompact(t.uplinkTotalGold || 0)}g</div></div>`
+          : ``;
+        const sniperPrestigeGoldLine = (t.def.id === "sniper")
+          ? `<div class="selRow"><div class="k">Prestige Gold</div><div class="v">+${formatCompact(t.prestigeGoldTotal || 0)}g</div></div>`
+          : ``;
 
         let specialSummary = "";
         if (t.specialUpgrades && t.specialUpgrades.length) {
@@ -3584,6 +3745,9 @@ class Game {
               return `<div class="selHint"><b>Mage Prestige Buff</b>: Mana x${auraMul.toFixed(2)} in ${auraRange.toFixed(2)} range.</div>`;
             })()
           : ``;
+        const magePrestigeCantAttackLine = (t.def.id === "mage" && t.level >= CFG.PRESTIGE_LEVEL)
+          ? `<div class="selHint"><b>Mage</b>: Can't attack due to prestige reasons. Arcane union rules.</div>`
+          : ``;
         const buildSkillInlinePreview = (towerId, baseRaw, previewRaw) => {
           if (!previewRaw || previewRaw === baseRaw) return "";
           const parts = [];
@@ -3631,15 +3795,18 @@ class Game {
               if (dDmg !== 0) parts.push(`Pulse DMG +${dDmg}`);
             }
           } else if (towerId === "poison") {
-            const b = /\+(\d+)[\s\S]*?x([\d.]+)[\s\S]*?DOT\/stack:\s*([\d.]+)/i.exec(baseRaw);
-            const p = /\+(\d+)[\s\S]*?x([\d.]+)[\s\S]*?DOT\/stack:\s*([\d.]+)/i.exec(previewRaw);
+            const b = /x(\d+(?:\.\d+)?)/i.exec(baseRaw);
+            const p = /x(\d+(?:\.\d+)?)/i.exec(previewRaw);
             if (b && p) {
-              const dStacks = Number(p[1]) - Number(b[1]);
-              const dMult = Number(p[2]) - Number(b[2]);
-              const dTick = Number(p[3]) - Number(b[3]);
-              if (Math.abs(dTick) > 0.0001) parts.push(`DOT/stack +${dTick.toFixed(1)}`);
-              if (dStacks !== 0) parts.push(`Surge stacks +${dStacks}`);
-              if (Math.abs(dMult) > 0.0001) parts.push(`DOT x +${dMult.toFixed(2)}`);
+              const dMult = Number(p[1]) - Number(b[1]);
+              if (Math.abs(dMult) > 0.0001) parts.push(`Poison x +${dMult.toFixed(2)}`);
+            }
+          } else if (towerId === "sniper") {
+            const b = /Current gain \+(\d+(?:\.\d+)?)%/i.exec(baseRaw);
+            const p = /Current gain \+(\d+(?:\.\d+)?)%/i.exec(previewRaw);
+            if (b && p) {
+              const dPct = Number(p[1]) - Number(b[1]);
+              if (Math.abs(dPct) > 0.0001) parts.push(`Overlevel +${dPct.toFixed(2)}%`);
             }
           } else if (towerId === "peel") {
             const dMagic = (previewView && baseView) ? (previewView.magic - baseView.magic) : 0;
@@ -3680,13 +3847,16 @@ class Game {
           ${uplinkCastsLine}
           <div class="selRow"><div class="k">Mana</div><div class="v">${primaryManaLine}</div></div>
           <div class="selRow"><div class="k">Mana/Hit</div><div class="v">${manaHitValue}</div></div>
-          <div class="selRow"><div class="k">Damage / Kills</div><div class="v">${damageSummary}</div></div>
+          ${isPeel ? `` : `<div class="selRow"><div class="k">Damage / Kills</div><div class="v">${damageSummary}</div></div>`}
+          ${peelUplinkTotalsLine}
+          ${sniperPrestigeGoldLine}
           ${t.level>=CFG.PRESTIGE_LEVEL ? `<div class="selRow"><div class="k">Prestige Mana</div><div class="v">${prestigeManaLine}</div></div>` : ``}
           ${peelBuffLine}
 
           ${hideMageCombatDetail ? `` : `<div class="selHint"><b>Auto Attack</b>: ${autoAttackText}</div>`}
           ${hideMageCombatDetail ? `` : `<div class="selHint"><b>${t.def.skillName}</b>: ${skillTextWithPreview}<span class="skillPreviewSlot">${skillPreviewSlot}</span></div>`}
           ${t.level>=CFG.PRESTIGE_LEVEL ? `<div class="selHint"><b>Prestige</b>: ${prestigeText}</div>` : ``}
+          ${magePrestigeCantAttackLine}
           ${magePrestigeBuffLine}
           ${specialSummary}
         `;
@@ -3695,12 +3865,12 @@ class Game {
         upBtn.textContent = canUp ? `Upgrade (Z) ${cost}` : "MAX";
         upBtn.title = "";
         if (fastBtn) {
-          const canFast = !!fastCost && this.gold >= fastCost && !isModalOpen();
+          const canFast = !!fastCost && this.gold >= fastCost && !isModalOpen() && !inspectMode;
           fastBtn.disabled = !canFast;
           fastBtn.textContent = fastCost ? `Fast Upgrade (X) ${fastCost}` : "Fast Upgrade (X)";
           fastBtn.title = "";
         }
-        sellBtn.disabled = isModalOpen();
+        sellBtn.disabled = isModalOpen() || inspectMode;
         sellBtn.textContent = `Sell (C) +${refund}`;
         return;
       }
@@ -3709,7 +3879,15 @@ class Game {
       if(this.selectedTowerDef){
         const d=this.selectedTowerDef;
         const b=d.base;
-        const autoAttackText = d.autoAttackDesc || "—";
+        const autoAttackText = (typeof d.autoAttackDesc === "function")
+          ? (d.autoAttackDesc({
+              level: 1,
+              magicBonus: b.MD,
+              magicBonusExact: b.MD,
+              perks: { magMul: 1 },
+              peelBuffs: { mag: { mul: 1 } }
+            }) || "—")
+          : (d.autoAttackDesc || "—");
         const desc=(d.skillDesc ? d.skillDesc({level:1, magicBonus:d.base.MD, perks:{magMul:1, dmgMul:1}}) : "—").replaceAll("\n","<br/>");
         const manaLine = (d.skillManaCost>0) ? `${d.skillManaCost}` : (d.id==="sniper" ? "Carepackage" : "—");
         const isPeel = d.id === "peel";

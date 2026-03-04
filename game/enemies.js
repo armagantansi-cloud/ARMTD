@@ -334,6 +334,19 @@ function computePrevWaveTotals(prevWave) {
       this.poisonTickTimer = Math.min(this.poisonTickTimer, CFG.POISON_TICK_MIN);
     }
 
+    multiplyPoison(mult){
+      const m = Math.max(1, Number(mult) || 1);
+      if (m <= 1 || this.poisonStacks <= 0) return false;
+      this.poisonStacks *= m;
+      if (this.poisonByTower.size) {
+        for (const [tower, stacks] of this.poisonByTower.entries()) {
+          this.poisonByTower.set(tower, Math.max(0, stacks * m));
+        }
+      }
+      this.poisonTickTimer = Math.min(this.poisonTickTimer, CFG.POISON_TICK_MIN);
+      return true;
+    }
+
     // Frostbite tek seferde uygulanir (zaten aktifse tekrar uygulanmaz).
     // Sure ve DOT degeri direnclere gore ayarlanir; ayrica tam slow verir.
     applyFrostbite(duration, perTick, sourceTower, magicPenFlat=0){
