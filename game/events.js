@@ -9,6 +9,7 @@ const GAME_EVENTS = Object.freeze({
   TOWER_BUILT: "tower_built",
   TOWER_LEVEL_UP: "tower_level_up",
   TOWER_PRESTIGE_UNLOCKED: "tower_prestige_unlocked",
+  TOWER_SPECIAL_UPGRADE_OPENED: "tower_special_upgrade_opened",
   TOWER_SPECIAL_UPGRADE_CHOSEN: "tower_special_upgrade_chosen",
   ENEMY_KILLED: "enemy_killed",
   CAMPAIGN_CLEARED: "campaign_cleared"

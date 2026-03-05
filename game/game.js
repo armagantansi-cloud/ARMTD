@@ -84,7 +84,7 @@ const PEEL_BUFF_INFO = {
 
 // Versioning: patch (right) for every update, minor (middle) for big updates.
 // Major (left) is increased manually.
-const GAME_VERSION = "0.3.6";
+const GAME_VERSION = "0.4.13";
 const LOG_TIPS = [
   "Tip: Discover each tower's unique skill and prestige skill.",
   "Tip: Towers can reach level 20. Sometimes even higher.",
@@ -426,6 +426,8 @@ class Game {
       this._campaignClearNotified = false;
       this.onCampaignClear = null;
       this.events = createEventBus();
+      this.tutorialHooks = { canAction: null, onAction: null };
+      this.tutorialForceFixedSpecialChoices = false;
       setEndlessScalingEnabled(false);
 
       this.uiAdapter = createGameUiAdapter(document);
@@ -593,6 +595,31 @@ class Game {
       this.uiAdapter.syncSpeed(v);
     }
 
+    setTutorialHooks(hooks = {}){
+      this.tutorialHooks = {
+        canAction: (typeof hooks?.canAction === "function") ? hooks.canAction : null,
+        onAction: (typeof hooks?.onAction === "function") ? hooks.onAction : null
+      };
+    }
+
+    canRunTutorialAction(actionId, payload = {}){
+      const fn = this.tutorialHooks?.canAction;
+      if (typeof fn !== "function") return true;
+      try {
+        return fn(String(actionId || ""), payload || {}, this) !== false;
+      } catch (_) {
+        return true;
+      }
+    }
+
+    notifyTutorialAction(actionId, payload = {}){
+      const fn = this.tutorialHooks?.onAction;
+      if (typeof fn !== "function") return;
+      try {
+        fn(String(actionId || ""), payload || {}, this);
+      } catch (_) {}
+    }
+
     addScreenShake(power=0.06, duration=0.20){
       const p = Math.max(0, Number(power) || 0);
       const d = Math.max(0, Number(duration) || 0);
@@ -709,7 +736,7 @@ class Game {
       this.persistLifetimeStats();
     }
 
-    recordTowerBuilt(towerId){
+    recordTowerBuilt(towerId, gx = null, gy = null){
       if (!towerId || !this.runStats?.towerBuildCounts) return;
       if (!(towerId in this.runStats.towerBuildCounts)) return;
       this.runStats.towerBuildCounts[towerId] += 1;
@@ -719,6 +746,8 @@ class Game {
       }
       this.emitGameEvent(GAME_EVENTS.TOWER_BUILT, {
         towerId: String(towerId),
+        gx: Number.isFinite(gx) ? Math.floor(gx) : null,
+        gy: Number.isFinite(gy) ? Math.floor(gy) : null,
         runCount: this.runStats.towerBuildCounts[towerId] || 0,
         lifetimeCount: this.lifetimeStats.towerBuildCounts[towerId] || 0
       });
@@ -1291,6 +1320,7 @@ class Game {
     start(){
       if(this.gameOver) return;
       if(this.started) return;
+      if (!this.canRunTutorialAction("start_wave", { via: "game.start" })) return;
       this.started=true;
       this.runStartMs = performance.now();
       if (!this._startLogged) {
@@ -1302,9 +1332,11 @@ class Game {
         mapIndex: this.mapIndex,
         isCustomMapRun: !!this.isCustomMapRun
       });
+      this.notifyTutorialAction("start_wave", { via: "game.start" });
     }
 
     nextWaveNow(){
+      if (!this.canRunTutorialAction("next_wave_now", { via: "game.nextWaveNow" })) return;
       if(this.gameOver){
         this.restart();
         return;
@@ -1322,6 +1354,7 @@ class Game {
       this.nextWaveNowGoldBuff.maxTime = Math.max(this.nextWaveNowGoldBuff.maxTime, this.nextWaveNowGoldBuff.timeLeft);
       this.logEvent(`Next Wave Now: ${buff.mult.toFixed(1)}x gold for ${buff.duration.toFixed(0)}s (alive mobs: ${alive})`);
       this.queueWave(this.nextWaveNum);
+      this.notifyTutorialAction("next_wave_now", { via: "game.nextWaveNow", alive });
     }
 
     jumpToWaveForTest(waveNum){
@@ -1635,10 +1668,12 @@ class Game {
       });
       this.cv.addEventListener("contextmenu",(ev)=>{
         ev.preventDefault();
+        if (!this.canRunTutorialAction("canvas_context_clear", {})) return;
         this.clearPlacement();
         this.clearSelection();
         this.selectedEnemy = null;
         this.selectedTowerInstance = null;
+        this.notifyTutorialAction("canvas_context_clear", {});
         this.refreshUI(true);
       });
       this.cv.addEventListener("click",(ev)=>{
@@ -1650,12 +1685,16 @@ class Game {
         const targetUi = this.getTowerTargetUiRects(this.selectedTowerInstance);
         if (targetUi && !inspectMode) {
           if (this.pointInRect(mx, my, targetUi.left)) {
+            if (!this.canRunTutorialAction("tower_target_cycle_prev", { towerId: this.selectedTowerInstance?.def?.id || null })) return;
             this.selectedTowerInstance.cycleTargetMode(-1);
+            this.notifyTutorialAction("tower_target_cycle_prev", { towerId: this.selectedTowerInstance?.def?.id || null });
             this.refreshUI(true);
             return;
           }
           if (this.pointInRect(mx, my, targetUi.right)) {
+            if (!this.canRunTutorialAction("tower_target_cycle_next", { towerId: this.selectedTowerInstance?.def?.id || null })) return;
             this.selectedTowerInstance.cycleTargetMode(1);
+            this.notifyTutorialAction("tower_target_cycle_next", { towerId: this.selectedTowerInstance?.def?.id || null });
             this.refreshUI(true);
             return;
           }
@@ -1666,29 +1705,59 @@ class Game {
 
         const clickedEnemy=this.enemyAtCanvas(mx,my);
         if(clickedEnemy){
+          if (!this.canRunTutorialAction("canvas_select_enemy", {
+            enemyType: clickedEnemy.typeId || null,
+            waveNum: this.currentWave
+          })) return;
           this.selectedEnemy=clickedEnemy;
           this.selectedTowerInstance=null;
           this.clearPlacement();
+          this.notifyTutorialAction("canvas_select_enemy", {
+            enemyType: clickedEnemy.typeId || null,
+            waveNum: this.currentWave
+          });
           this.refreshUI(true);
           return;
         }
 
         const clickedTower=this.towerAtGrid(g.x,g.y);
         if(clickedTower){
+          if (!this.canRunTutorialAction("canvas_select_tower", {
+            towerId: clickedTower.def?.id || null,
+            gx: clickedTower.gx,
+            gy: clickedTower.gy,
+            level: clickedTower.level
+          })) return;
           this.selectedTowerInstance=clickedTower;
           this.selectedEnemy=null;
           this.clearPlacement();
+          this.notifyTutorialAction("canvas_select_tower", {
+            towerId: clickedTower.def?.id || null,
+            gx: clickedTower.gx,
+            gy: clickedTower.gy,
+            level: clickedTower.level
+          });
           this.refreshUI(true);
           return;
         }
 
         this.clearSelection();
         if (inspectMode) {
+          this.notifyTutorialAction("canvas_click_empty", { gx: g.x, gy: g.y, inspectMode: true });
           this.refreshUI(true);
           return;
         }
 
-        if(!this.selectedTowerDef){ this.refreshUI(true); return; }
+        if(!this.selectedTowerDef){
+          this.notifyTutorialAction("canvas_click_empty", { gx: g.x, gy: g.y, inspectMode: false });
+          this.refreshUI(true);
+          return;
+        }
+        if (!this.canRunTutorialAction("canvas_place_tower", {
+          towerId: this.selectedTowerDef.id,
+          gx: g.x,
+          gy: g.y
+        })) return;
         if (!this.canPlaceTowerAt(g.x, g.y, this.selectedTowerDef)) {
           if (this.selectedTowerDef.id === "peel" && this.towers.some(t => t.def.id === "peel")) {
           this.logEvent("Peel Tower limit: 1");
@@ -1701,10 +1770,17 @@ class Game {
         if(this.gold < cost){ this.refreshUI(true); return; }
 
         this.gold -= cost;
-        this.towers.push(new Tower(this.selectedTowerDef, g.x, g.y, this));
-        this.recordTowerBuilt(this.selectedTowerDef.id);
+        const placedTower = new Tower(this.selectedTowerDef, g.x, g.y, this);
+        this.towers.push(placedTower);
+        this.recordTowerBuilt(this.selectedTowerDef.id, g.x, g.y);
         this.evaluateUniqueTowerTypeChallenge();
         if (this.selectedTowerDef.id === "sniper") this.runQuestState.sniperPurchased = true;
+        this.notifyTutorialAction("canvas_place_tower", {
+          towerId: this.selectedTowerDef.id,
+          gx: g.x,
+          gy: g.y,
+          level: placedTower.level
+        });
         SFX.place();
         this.refreshUI(true);
       });
@@ -1713,10 +1789,22 @@ class Game {
     sellSelectedTower(){
       const t=this.selectedTowerInstance;
       if(!t) return;
+      if (!this.canRunTutorialAction("sell_selected_tower", {
+        towerId: t.def?.id || null,
+        gx: t.gx,
+        gy: t.gy,
+        level: t.level
+      })) return;
       const refund=Math.round(t.spentGold*0.50);
       this.gold += refund;
       this.towers = this.towers.filter(x=>x!==t);
       this.selectedTowerInstance=null;
+      this.notifyTutorialAction("sell_selected_tower", {
+        towerId: t.def?.id || null,
+        gx: t.gx,
+        gy: t.gy,
+        level: t.level
+      });
       SFX.sell();
       this.refreshUI(true);
     }
@@ -1724,10 +1812,17 @@ class Game {
     openMilestoneModal(tower){
       const tier = milestoneTier(tower.level);
       if (!tier) return;
+      this.emitGameEvent(GAME_EVENTS.TOWER_SPECIAL_UPGRADE_OPENED, {
+        towerId: tower?.def?.id || null,
+        towerLevel: tower?.level || 0,
+        tier
+      });
       this.uiHover.upgrade = false;
       this.uiHover.fast = false;
 
-      const choices = buildChoicesForTower(tower, tier);
+      const choices = buildChoicesForTower(tower, tier, {
+        forceFixedByCode: !!this.tutorialForceFixedSpecialChoices
+      });
 
       openModal(
         `${tower.def.name} - Lv ${tower.level} Special Upgrade <span class="tierBadge">Tier ${tier}</span>`,
@@ -1736,6 +1831,10 @@ class Game {
         (choice) => {
           this.hoverSpecialChoice = null;
           choice.apply(tower);
+          closeModal();
+          this.gameSpeed = this.prevSpeedBeforeModal;
+          this.syncSpeedUI(this.gameSpeed);
+          this.refreshUI(true);
           this.emitGameEvent(GAME_EVENTS.TOWER_SPECIAL_UPGRADE_CHOSEN, {
             towerId: tower.def?.id || null,
             towerLevel: tower.level,
@@ -1743,10 +1842,6 @@ class Game {
             rarityId: String(choice?.rarityId || "common"),
             title: String(choice?.title || "")
           });
-          closeModal();
-          this.gameSpeed = this.prevSpeedBeforeModal;
-          this.syncSpeedUI(this.gameSpeed);
-          this.refreshUI(true);
         },
         (choice) => {
           this.hoverSpecialChoice = choice || null;
@@ -3729,6 +3824,11 @@ class Game {
           ? `${baseView?.bounce ?? t.getBounceCount()}${bouncePreview}`
           : `${formatCompact(baseView?.adLow ?? 0)}-${formatCompact(baseView?.adHigh ?? 0)}${adPreview}`;
         const asValue = `${(baseView?.as ?? t.AS).toFixed(2)}${asPreview}`;
+        const rangeValue = `${t.range.toFixed(2)}`;
+        const critChancePct = (Number(t.critChance) || 0) * 100;
+        const critMult = Number(t.critDmg) || 1;
+        const critValue = `${critChancePct.toFixed(1)}% / x${critMult.toFixed(2)}`;
+        const manaRegenValue = `${t.manaRegen.toFixed(2)}/s`;
         const magicValue = `${baseView?.magic ?? Math.round(t.magicBonus * t.perks.magMul * t.perks.dmgMul * t.peelMul("mag"))}${magicPreview}`;
         const manaHitValue = `${(baseView?.manaHit ?? t.manaOnHit).toFixed(2)}${manaHitPreview}`;
         const peelPowerPreview = (isPeel && previewView && baseView && (previewView.peelPower - baseView.peelPower) !== 0)
@@ -3842,10 +3942,13 @@ class Game {
           ${t.def.id==="sniper" ? `<div class="selRow"><div class="k">Secondary Lv</div><div class="v"><span class="${secondaryClass}">${t.secondaryLevel ?? 0}</span></div></div>` : ``}
           <div class="selRow"><div class="k">${t.def.id === "peel" ? "Bounce" : "AD"}</div><div class="v">${adValue}</div></div>
           <div class="selRow"><div class="k">AS</div><div class="v">${asValue}</div></div>
+          <div class="selRow"><div class="k">Range</div><div class="v">${rangeValue}</div></div>
+          <div class="selRow"><div class="k">Crit</div><div class="v">${critValue}</div></div>
           <div class="selRow"><div class="k">Magic</div><div class="v">${magicValue}</div></div>
           ${peelPowerLine}
           ${uplinkCastsLine}
           <div class="selRow"><div class="k">Mana</div><div class="v">${primaryManaLine}</div></div>
+          <div class="selRow"><div class="k">Mana Regen</div><div class="v">${manaRegenValue}</div></div>
           <div class="selRow"><div class="k">Mana/Hit</div><div class="v">${manaHitValue}</div></div>
           ${isPeel ? `` : `<div class="selRow"><div class="k">Damage / Kills</div><div class="v">${damageSummary}</div></div>`}
           ${peelUplinkTotalsLine}

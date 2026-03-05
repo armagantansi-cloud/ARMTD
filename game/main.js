@@ -4,7 +4,9 @@ import { SFX, MUSIC } from "./audio.js";
 import { GameMap } from "./map.js";
 import { CONTENT_REGISTRY } from "./content_registry.js";
 import { GAME_EVENTS } from "./events.js";
+import { createTutorialController, TUTORIAL_STEP_ORDER } from "./tutorial.js";
 import {
+  PROGRESSION_KEY,
   applyCampaignClearToProgression,
   createDefaultProgressionState,
   isCodexEntryUnlockedByProgression,
@@ -35,7 +37,7 @@ const CUSTOM_MAPS_KEY = "armtd_custom_maps_v1";
 const CUSTOM_MAPS_SCHEMA = 1;
 const PERSISTENT_STATS_KEY = "armtd_stats_lifetime_v1";
 const HIGH_KILLS_KEY = "td_highkills_v2";
-const RELEASE_RESET_KEY = "armtd_release_reset_0_3_0";
+const RELEASE_RESET_KEY = "armtd_release_reset_0_4_13";
 const START_GOLD_REWARD_KEY = "armtd_start_gold_reward_v1";
 const START_GOLD_REWARD_BONUS = 30;
 const MENU_CODEX_DRAW_ALPHA = 0.98;
@@ -58,6 +60,7 @@ let settings = cloneSettings(loadSettings());
 let musicInteractionUnlocked = false;
 applyAudioSettings();
 let progressionState = readProgressionState();
+let tutorialController = null;
 
 let pauseMenuOpen = false;
 let pauseResumeSpeed = 1.0;
@@ -137,6 +140,9 @@ const settingsMuteBtn = document.getElementById("settingsMuteBtn");
 const settingsMusicVolumeSlider = document.getElementById("settingsMusicVolumeSlider");
 const settingsMusicVolumeValue = document.getElementById("settingsMusicVolumeValue");
 const settingsMusicMuteBtn = document.getElementById("settingsMusicMuteBtn");
+const settingsTutorialToggleBtn = document.getElementById("settingsTutorialToggleBtn");
+const settingsTutorialResetBtn = document.getElementById("settingsTutorialResetBtn");
+const settingsTutorialProgress = document.getElementById("settingsTutorialProgress");
 const settingsResetKeybindsBtn = document.getElementById("settingsResetKeybindsBtn");
 const settingsKeybindList = document.getElementById("settingsKeybindList");
 
@@ -160,8 +166,34 @@ const pauseSettingsBtn = document.getElementById("pauseSettingsBtn");
 const pauseResumeBtn = document.getElementById("pauseResumeBtn");
 bindGameplayEvents();
 
+tutorialController = createTutorialController({
+  game,
+  getSettings: () => settings,
+  commitSettings: (mutator) => {
+    if (typeof mutator === "function") mutator(settings);
+    persistSettings(false);
+    syncSettingsUI();
+    if (tutorialController) tutorialController.handleSettingsChanged();
+  },
+  isMainMenuOpen
+});
+if (typeof game.setTutorialHooks === "function") {
+  game.setTutorialHooks({
+    canAction: (actionId, payload) => tutorialController ? tutorialController.canAction(actionId, payload) : true,
+    onAction: (actionId, payload) => {
+      if (!tutorialController) return;
+      tutorialController.onAction(actionId, payload);
+    }
+  });
+}
+
 initUI(game, {
   getKeybinds: () => settings.keybinds,
+  canUiAction: (actionId, payload) => tutorialController ? tutorialController.canAction(actionId, payload) : true,
+  onUiAction: (actionId, payload) => {
+    if (!tutorialController) return;
+    tutorialController.onAction(actionId, payload);
+  },
   onMuteToggle: () => {
     const nextMuted = !(settings.audio.muted && settings.audio.musicMuted);
     settings.audio.muted = nextMuted;
@@ -226,6 +258,12 @@ function markBootHealthy(){
     window.__armtdBoot = window.__armtdBoot || {};
     window.__armtdBoot.ok = true;
     sessionStorage.removeItem(BOOT_RETRY_KEY);
+    const u = new URL(window.location.href);
+    if (u.searchParams.has("bootRetry") || u.searchParams.has("bootRecover")) {
+      u.searchParams.delete("bootRetry");
+      u.searchParams.delete("bootRecover");
+      history.replaceState(null, "", u.toString());
+    }
   } catch (_) {}
 }
 
@@ -237,6 +275,7 @@ function applyReleaseDataResetIfNeeded(){
     localStorage.removeItem(HIGH_KILLS_KEY);
     localStorage.removeItem(MAP_PROGRESS_KEY);
     localStorage.removeItem(RUN_SAVE_KEY);
+    localStorage.removeItem(PROGRESSION_KEY);
     localStorage.setItem(RELEASE_RESET_KEY, "1");
   } catch (_) {}
 }
@@ -901,6 +940,7 @@ function showMainMenu(){
   hideMapEditorPage();
   hideMapSelect();
   MUSIC.setScene("menu");
+  if (tutorialController) tutorialController.onEnterMainMenu();
   refreshMenuTotalStars();
   updateContinueButton();
 }
@@ -912,6 +952,7 @@ function hideMainMenu(){
   hideMapEditorPage();
   hideMapSelect();
   MUSIC.setScene("game");
+  if (tutorialController) tutorialController.onEnterGameplay();
 }
 
 function hasStartGoldRewardClaimed(){
@@ -2076,6 +2117,128 @@ function renderMenuPatchNotes(){
       notes: [
         "Map select tooltip layering fix: star descriptions now stay above neighboring map cards instead of rendering behind them."
       ]
+    },
+    {
+      version: "0.4.0",
+      notes: [
+        "Major tutorial system added: step-by-step guided onboarding with spotlight highlight, animated arrow, and per-step gameplay pause/lock until required trigger is completed.",
+        "Tutorial progression is now persistent: completed steps are saved and future runs only show unfinished steps.",
+        "Settings now include Tutorial ON/OFF and Reset Tutorial controls with progress display.",
+        "Archer/Enemy onboarding flow added with guided placement, stat explanations, start trigger, enemy inspection, Mage follow-up, fast-upgrade guidance, and special-upgrade intro.",
+        "Selected Tower panel now includes Range, Crit and Mana Regen rows for clearer stat teaching and runtime readability.",
+        "Special Upgrade choice set is now deterministic by stat: Magic=Uncommon, AD=Rare, AS=Epic."
+      ]
+    },
+    {
+      version: "0.4.1",
+      notes: [
+        "Tutorial highlight targets were widened from value-only spans to full stat boxes for Gold/Core/Wave/Mobs readability.",
+        "Tutorial card/arrow placement was shifted left and arrow anchors now avoid center-overlap to keep row text readable.",
+        "Tower Shop step now points to the Tower Shop title while still allowing click completion on the whole shop area.",
+        "Archer tutorial placement target was moved 5 tiles upward and coordinate text was removed from tutorial copy.",
+        "Fixed tutorial interaction deadlocks by preventing card click-blocking and adding safer missing-target fallback behavior."
+      ]
+    },
+    {
+      version: "0.4.2",
+      notes: [
+        "Tutorial upgrade-step gating was relaxed to prevent upgrade button deadlock during required upgrade flow.",
+        "Archer tutorial placement moved one tile downward from the previous fix; Mage follow-up placement moved accordingly.",
+        "Archer shop-selection highlight area was expanded for easier selection targeting.",
+        "Map tile tutorial highlights are now taller on the Y axis for better placement visibility.",
+        "Arrow endpoints were moved tighter to highlight corners to reduce overlap with selected-row values.",
+        "Tutorial Reset is now enabled only from Main Menu settings; in-run settings reset is disabled to avoid state bugs."
+      ]
+    },
+    {
+      version: "0.4.3",
+      notes: [
+        "Tutorial arrow endpoints are now forced to the highlight top-right corner (including map placement and Selected rows).",
+        "Tutorial card position was nudged right to leave cleaner arrow space near highlights.",
+        "Archer Upgrade tutorial step lock was temporarily removed to avoid interaction deadlocks while testing."
+      ]
+    },
+    {
+      version: "0.4.4",
+      notes: [
+        "Tutorial arrows now auto-select the nearest highlight corner instead of always using top-right.",
+        "Tutorial arrow tip alignment was corrected so the pointer tip lands on the exact target corner.",
+        "Archer Upgrade tutorial step now continuously re-locks selection to Archer and force-enables Upgrade when requirements are met."
+      ]
+    },
+    {
+      version: "0.4.5",
+      notes: [
+        "Fixed Start tutorial deadlock: the step now auto-completes as soon as the run actually starts.",
+        "Start tutorial step now supports click-complete without consuming the click, so Start works in one press.",
+        "Prevented post-start frozen tutorial state when the Start button hides after wave launch."
+      ]
+    },
+    {
+      version: "0.4.6",
+      notes: [
+        "Fixed runtime crash in Selected panel: Crit display now reads tower crit multiplier from `critDmg`.",
+        "Added safe numeric fallback for Crit chance/multiplier formatting to prevent toFixed-on-undefined errors.",
+        "Start flow no longer crashes on first wave launch due to Selected panel stat render."
+      ]
+    },
+    {
+      version: "0.4.7",
+      notes: [
+        "Fixed Mage tutorial affordability gate: Mage cost is now read correctly from content registry.",
+        "Resolved early Mage tutorial trigger caused by incorrect Map-style registry access returning cost 0.",
+        "Mage placement step now waits for actual Mage purchase affordability before showing."
+      ]
+    },
+    {
+      version: "0.4.8",
+      notes: [
+        "Special Upgrade tutorial now keeps Selected panel visible above tutorial blur so hover preview deltas can be read live.",
+        "Special Upgrade tutorial completion now waits for actual upgrade selection event instead of generic modal click.",
+        "Adjusted special-upgrade chosen event timing to restore run speed correctly after selection under tutorial pause."
+      ]
+    },
+    {
+      version: "0.4.9",
+      notes: [
+        "Fixed Special Upgrade tutorial hang: added missing listener for `tower_special_upgrade_chosen` event.",
+        "Added fallback auto-complete when Special Upgrade modal closes to prevent stale tutorial card at screen bottom.",
+        "Special Upgrade tutorial flow now exits cleanly right after pick without asking for extra click."
+      ]
+    },
+    {
+      version: "0.4.10",
+      notes: [
+        "Special Upgrade fixed-rarity set (MAG/AD/AS) is now limited to the first tutorial Special Upgrade step only.",
+        "Outside that tutorial step, Special Upgrades now use the normal rarity roll system again.",
+        "Tutorial now toggles fixed-rarity mode only while the tutorial special-upgrade flow is active."
+      ]
+    },
+    {
+      version: "0.4.11",
+      notes: [
+        "Tutorial arrows are temporarily disabled (code kept for later re-enable).",
+        "Mage Level Orb tutorial step now continues with click-anywhere instead of requiring direct mage click.",
+        "Tutorial completion logs were removed from Log panel to reduce noise.",
+        "Release reset key rotated for itch deployment; run/progress/lifetime save data is cleared once on first boot.",
+        "Boot watchdog hardened: second failed boot attempt now auto-clears critical save keys before final recovery reload."
+      ]
+    },
+    {
+      version: "0.4.12",
+      notes: [
+        "Tutorial card positioning was restored while arrows remain disabled, fixing top-left stuck cards.",
+        "Cards now continue using dynamic per-target placement logic without rendering tutorial arrows.",
+        "Tutorial guidance boxes no longer collapse into a single corner after arrow disable."
+      ]
+    },
+    {
+      version: "0.4.13",
+      notes: [
+        "Itch release prep: release-reset key rotated again so first boot clears save/progress/stats data one more time.",
+        "Boot-recovery safety from previous patch remains active for v0.0.0 freeze cases.",
+        "Build/version cache tags bumped for clean deployment pickup."
+      ]
     }
   ];
   const orderedPatchHistory = [...patchHistory].reverse();
@@ -2746,6 +2909,24 @@ function bindSettingsModal(){
     };
   }
 
+  if (settingsTutorialToggleBtn) {
+    settingsTutorialToggleBtn.onclick = () => {
+      if (!settings.tutorial || typeof settings.tutorial !== "object") settings.tutorial = { enabled: true, completedStepIds: [] };
+      settings.tutorial.enabled = settings.tutorial.enabled === false;
+      persistSettings(false);
+      syncSettingsUI();
+      if (tutorialController) tutorialController.handleSettingsChanged();
+    };
+  }
+
+  if (settingsTutorialResetBtn) {
+    settingsTutorialResetBtn.onclick = () => {
+      if (!isMainMenuOpen()) return;
+      if (tutorialController) tutorialController.resetProgress();
+      syncSettingsUI();
+    };
+  }
+
   if (settingsResetKeybindsBtn) {
     settingsResetKeybindsBtn.onclick = () => {
       for (const def of KEYBIND_DEFS) settings.keybinds[def.id] = def.defaultCode;
@@ -2756,6 +2937,9 @@ function bindSettingsModal(){
 }
 
 function syncSettingsUI(){
+  if (!settings.tutorial || typeof settings.tutorial !== "object") {
+    settings.tutorial = { enabled: true, completedStepIds: [] };
+  }
   const volPct = Math.round(clamp(settings.audio.volume * 100, 0, 100));
   if (settingsVolumeSlider) settingsVolumeSlider.value = String(volPct);
   if (settingsVolumeValue) settingsVolumeValue.textContent = `${volPct}%`;
@@ -2764,6 +2948,16 @@ function syncSettingsUI(){
   if (settingsMusicVolumeSlider) settingsMusicVolumeSlider.value = String(musicVolPct);
   if (settingsMusicVolumeValue) settingsMusicVolumeValue.textContent = `${musicVolPct}%`;
   if (settingsMusicMuteBtn) settingsMusicMuteBtn.textContent = settings.audio.musicMuted ? "Music Unmute" : "Music Mute";
+  if (settingsTutorialToggleBtn) settingsTutorialToggleBtn.textContent = settings.tutorial.enabled === false ? "Tutorial OFF" : "Tutorial ON";
+  const completedTutorialSteps = Array.isArray(settings.tutorial.completedStepIds) ? settings.tutorial.completedStepIds.length : 0;
+  if (settingsTutorialProgress) settingsTutorialProgress.textContent = `Completed: ${completedTutorialSteps}/${TUTORIAL_STEP_ORDER.length}`;
+  const canResetTutorial = completedTutorialSteps > 0 && isMainMenuOpen();
+  if (settingsTutorialResetBtn) {
+    settingsTutorialResetBtn.disabled = !canResetTutorial;
+    settingsTutorialResetBtn.title = isMainMenuOpen()
+      ? ""
+      : "Tutorial reset is available only in Main Menu settings.";
+  }
 }
 
 function openSettings(){

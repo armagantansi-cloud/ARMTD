@@ -172,6 +172,11 @@ const MODES = {
   const SPECIAL_EXPECTED_MAG_PCT = SPECIAL_RARITIES.reduce((sum, r) => sum + r.chance * r.pct, 0);
   const SPECIAL_EXPECTED_MAG_MUL = 1 + SPECIAL_EXPECTED_MAG_PCT; // 1.357
   const SPECIAL_EXPECTED_OTHER_MAG_MUL = 1 + (SPECIAL_MYTHIC_CHANCE * SPECIAL_MYTHIC_OTHER_PCT); // 1.0012
+  const SPECIAL_FIXED_RARITY_BY_CODE = Object.freeze({
+    mag: SPECIAL_RARITIES.find(r => r.id === "uncommon") || SPECIAL_RARITIES[0],
+    ad: SPECIAL_RARITIES.find(r => r.id === "rare") || SPECIAL_RARITIES[0],
+    as: SPECIAL_RARITIES.find(r => r.id === "epic") || SPECIAL_RARITIES[0]
+  });
 
   function rollSpecialRarity(){
     if (SPECIAL_FORCE_LEGENDARY) {
@@ -190,8 +195,9 @@ const MODES = {
     SPECIAL_FORCE_LEGENDARY = !!enabled;
   }
 
-  function buildChoicesForTower(tower, tier){
+  function buildChoicesForTower(tower, tier, options = {}){
     const stats = ["ad","as","mag"];
+    const forceFixedByCode = !!options.forceFixedByCode;
 
     const spec = {
       ad:  { short:"AD",  label:"Attack Damage", desc:"Increases attack damage and hit power.", apply:(t,p)=>{ t.perks.adMul *= (1+p); } },
@@ -200,7 +206,9 @@ const MODES = {
     };
 
     return stats.map(code => {
-      const rarity = rollSpecialRarity();
+      const rarity = forceFixedByCode
+        ? (SPECIAL_FIXED_RARITY_BY_CODE[code] || rollSpecialRarity())
+        : rollSpecialRarity();
       const stat = spec[code];
 
       if (rarity.id === "mythical") {

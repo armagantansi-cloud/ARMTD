@@ -376,6 +376,18 @@
           <button id="settingsResetKeybindsBtn">Reset Keybinds</button>
         </div>
       </div>
+
+      <div class="settingsCard">
+        <h4>Tutorial</h4>
+        <div class="settingsTutorialBody">
+          <div id="settingsTutorialProgress" class="small">Completed: 0/0</div>
+          <div class="btnRow">
+            <button id="settingsTutorialToggleBtn">Tutorial ON</button>
+            <button id="settingsTutorialResetBtn">Reset Tutorial</button>
+          </div>
+          <div class="small">Only unfinished tutorial steps are shown in future runs.</div>
+        </div>
+      </div>
     </div>
     <div class="winActions">
       <button id="settingsCloseBtn" class="good">Close</button>
@@ -426,23 +438,50 @@
   window.__armtdBoot = window.__armtdBoot || { ok: false, startedAt: Date.now() };
 </script>
 <!-- Entry point (Live Server: open this index.html) -->
-<script type="module" src="game/main.js?v=0.3.1"></script>
+<script type="module" src="game/main.js?v=0.4.13"></script>
 <script>
   (() => {
     const RETRY_KEY = "armtd_boot_retry_v1";
-    const watchdogMs = 3800;
+    const RECOVER_KEY = "armtd_boot_recover_v1";
+    const RECOVER_CLEAR_KEYS = [
+      "armtd_run_save_v1",
+      "armtd_map_progress_v1",
+      "armtd_progression_v1",
+      "armtd_stats_lifetime_v1",
+      "td_highkills_v2"
+    ];
+    const watchdogMs = 4200;
     setTimeout(() => {
       if (window.__armtdBoot?.ok) {
-        try { sessionStorage.removeItem(RETRY_KEY); } catch (_) {}
+        try {
+          sessionStorage.removeItem(RETRY_KEY);
+          sessionStorage.removeItem(RECOVER_KEY);
+        } catch (_) {}
         return;
       }
       let retried = false;
-      try { retried = sessionStorage.getItem(RETRY_KEY) === "1"; } catch (_) {}
+      let recovered = false;
+      try {
+        retried = sessionStorage.getItem(RETRY_KEY) === "1";
+        recovered = sessionStorage.getItem(RECOVER_KEY) === "1";
+      } catch (_) {}
       if (!retried) {
         try { sessionStorage.setItem(RETRY_KEY, "1"); } catch (_) {}
         try {
           const u = new URL(window.location.href);
           u.searchParams.set("bootRetry", String(Date.now()));
+          window.location.replace(u.toString());
+          return;
+        } catch (_) {}
+      }
+      if (!recovered) {
+        try {
+          for (const key of RECOVER_CLEAR_KEYS) localStorage.removeItem(key);
+        } catch (_) {}
+        try { sessionStorage.setItem(RECOVER_KEY, "1"); } catch (_) {}
+        try {
+          const u = new URL(window.location.href);
+          u.searchParams.set("bootRecover", String(Date.now()));
           window.location.replace(u.toString());
           return;
         } catch (_) {}

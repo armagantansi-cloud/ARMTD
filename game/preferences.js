@@ -35,6 +35,10 @@ const DEFAULT_SETTINGS = {
     volume: 0.18,
     musicMuted: false,
     musicVolume: 0.20
+  },
+  tutorial: {
+    enabled: true,
+    completedStepIds: []
   }
 };
 
@@ -70,11 +74,30 @@ function normalizeAudio(input){
   };
 }
 
+function normalizeTutorial(input){
+  const raw = input && typeof input === "object" ? input : {};
+  const completedRaw = Array.isArray(raw.completedStepIds) ? raw.completedStepIds : [];
+  const completedStepIds = [];
+  const seen = new Set();
+  for (const item of completedRaw) {
+    const id = String(item || "").trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    completedStepIds.push(id);
+    if (completedStepIds.length >= 256) break;
+  }
+  return {
+    enabled: raw.enabled !== false,
+    completedStepIds
+  };
+}
+
 function normalizeSettings(input){
   const raw = input && typeof input === "object" ? input : {};
   const normalized = {
     keybinds: normalizeKeybinds(raw.keybinds),
-    audio: normalizeAudio(raw.audio)
+    audio: normalizeAudio(raw.audio),
+    tutorial: normalizeTutorial(raw.tutorial)
   };
   return normalized;
 }

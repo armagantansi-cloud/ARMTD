@@ -95,6 +95,24 @@ export function initUI(game, options={}){
     ? options.getKeybinds()
     : DEFAULT_KEYBINDS);
   const actionPressed = (actionId, ev) => isActionPressed(actionId, ev, getKeybinds());
+  const canUiAction = (actionId, payload = {}) => {
+    if (typeof options.canUiAction === "function") {
+      return options.canUiAction(actionId, payload, game) !== false;
+    }
+    if (typeof game?.canRunTutorialAction === "function") {
+      return game.canRunTutorialAction(actionId, payload) !== false;
+    }
+    return true;
+  };
+  const notifyUiAction = (actionId, payload = {}) => {
+    if (typeof options.onUiAction === "function") {
+      options.onUiAction(actionId, payload, game);
+      return;
+    }
+    if (typeof game?.notifyTutorialAction === "function") {
+      game.notifyTutorialAction(actionId, payload);
+    }
+  };
 
   if (!window.__armtdClickSfxBound) {
     window.__armtdClickSfxBound = true;
@@ -154,15 +172,21 @@ export function initUI(game, options={}){
   }
   renderShop();
 
-  document.getElementById("startWaveBtn").onclick = () => game.start();
+  document.getElementById("startWaveBtn").onclick = () => {
+    if (!canUiAction("start_wave_button", { source: "start_button" })) return;
+    game.start();
+    notifyUiAction("start_wave_button", { source: "start_button" });
+  };
   const nextWaveNowBtnEl = document.getElementById("nextWaveNowBtn");
   if (nextWaveNowBtnEl) {
     let lastNextWaveTrigger = 0;
     const triggerNextWaveNow = () => {
+      if (!canUiAction("next_wave_now_button", { source: "next_wave_button" })) return;
       const t = performance.now();
       if (t - lastNextWaveTrigger < 110) return;
       lastNextWaveTrigger = t;
       game.nextWaveNow();
+      notifyUiAction("next_wave_now_button", { source: "next_wave_button" });
     };
     nextWaveNowBtnEl.onclick = () => triggerNextWaveNow();
     nextWaveNowBtnEl.onpointerdown = (ev) => {
@@ -215,6 +239,12 @@ export function initUI(game, options={}){
 
     const t=game.selectedTowerInstance;
     if(!t) return;
+    if (!canUiAction("upgrade_selected_tower", {
+      towerId: t.def?.id || null,
+      level: t.level,
+      gx: t.gx,
+      gy: t.gy
+    })) return;
     if(!t.canUpgrade()) return;
 
     const cost=t.upgradeCost();
@@ -239,6 +269,13 @@ export function initUI(game, options={}){
       game.centerQueue.push({ text:`${t.def.name} Prestige Unlocked`, life:1.6 });
     }
 
+    notifyUiAction("upgrade_selected_tower", {
+      towerId: t.def?.id || null,
+      fromLevel: lvlBefore,
+      toLevel: t.level,
+      gx: t.gx,
+      gy: t.gy
+    });
     game.refreshUI(true);
   };
 
@@ -259,7 +296,21 @@ export function initUI(game, options={}){
   const sellSelected = () => {
     if(modalOpen) return;
     if(game.gameOver) return;
+    const t = game.selectedTowerInstance;
+    if (!t) return;
+    if (!canUiAction("sell_selected_tower", {
+      towerId: t.def?.id || null,
+      level: t.level,
+      gx: t.gx,
+      gy: t.gy
+    })) return;
     game.sellSelectedTower();
+    notifyUiAction("sell_selected_tower", {
+      towerId: t.def?.id || null,
+      level: t.level,
+      gx: t.gx,
+      gy: t.gy
+    });
   };
   sellBtnHud.onclick = () => sellSelected();
 
@@ -277,10 +328,12 @@ export function initUI(game, options={}){
       || ((raw > MAX_PUBLIC_GAME_SPEED) && (game.gameSpeed > MAX_PUBLIC_GAME_SPEED || lastNonZeroSpeed > MAX_PUBLIC_GAME_SPEED));
     const cap = allowCheat ? MAX_CHEAT_GAME_SPEED : MAX_PUBLIC_GAME_SPEED;
     const next = Math.min(cap, Math.max(0, raw));
+    if (!canUiAction("set_game_speed", { value: next, raw })) return;
     game.gameSpeed=next;
     if (next > 0) lastNonZeroSpeed = next;
     speedSlider.value = Math.min(MAX_PUBLIC_GAME_SPEED, next).toFixed(1);
     speedLabel.textContent=`${next.toFixed(1)}x`;
+    notifyUiAction("set_game_speed", { value: next, raw });
   }
   speedSlider.addEventListener("input", ()=>setSpeed(parseFloat(speedSlider.value)));
   if (speedCycleBtn) {
@@ -303,21 +356,25 @@ export function initUI(game, options={}){
   setSpeed(1.0);
 
   function clearSelection(){
+    if (!canUiAction("clear_selection", {})) return;
     game.selectedTowerDef=null;
     game.selectedTowerInstance=null;
     game.selectedEnemy=null;
     game.selectedHazard=null;
     for (const b of shopButtons) b.classList.remove("active");
+    notifyUiAction("clear_selection", {});
     game.refreshUI(true);
   }
 
   function selectTower(def, btn){
+    if (!canUiAction("shop_select_tower", { towerId: def?.id || null })) return;
     game.selectedTowerDef=def;
     game.selectedTowerInstance=null;
     game.selectedEnemy=null;
     game.selectedHazard=null;
     for (const b of shopButtons) b.classList.remove("active");
     if (btn) btn.classList.add("active");
+    notifyUiAction("shop_select_tower", { towerId: def?.id || null });
     game.refreshUI(true);
   }
 
@@ -325,11 +382,18 @@ export function initUI(game, options={}){
     if(game.gameOver) return;
     const t=game.selectedTowerInstance;
     if(!t) return;
+    if (!canUiAction("fast_upgrade_selected_tower", {
+      towerId: t.def?.id || null,
+      level: t.level,
+      gx: t.gx,
+      gy: t.gy
+    })) return;
     if(!t.canUpgrade()) return;
     if(modalOpen) return;
 
     const nextTarget = Math.min(20, (Math.floor(t.level / 5) + 1) * 5);
     if (t.level >= nextTarget) return;
+    const beforeLevel = t.level;
 
     while (t.level < nextTarget) {
       const cost=t.upgradeCost();
@@ -355,6 +419,15 @@ export function initUI(game, options={}){
       if(!t.canUpgrade()) break;
     }
 
+    if (t.level !== beforeLevel) {
+      notifyUiAction("fast_upgrade_selected_tower", {
+        towerId: t.def?.id || null,
+        fromLevel: beforeLevel,
+        toLevel: t.level,
+        gx: t.gx,
+        gy: t.gy
+      });
+    }
     game.refreshUI(true);
   }
 
